@@ -8,7 +8,7 @@ class MLKitPoseService {
   MLKitPoseService() {
     final options = PoseDetectorOptions(
       mode: PoseDetectionMode.stream,
-      model: PoseDetectionModel.base,
+      model: PoseDetectionModel.accurate,
     );
 
     _poseDetector = PoseDetector(options: options);
