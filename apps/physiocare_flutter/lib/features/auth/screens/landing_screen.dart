@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:physiocare_flutter/features/pose/pose_detector/camera_pose_screen.dart';
+import '../../../core/routes/app_routes.dart';
 
 class LandingScreen extends StatelessWidget {
   const LandingScreen({super.key});
@@ -114,7 +116,7 @@ class _Navbar extends StatelessWidget {
 
           TextButton(
             onPressed: () {
-              // TODO: Navigate to Login
+              Navigator.pushNamed(context, AppRoutes.login);
             },
             child: const Text(
               "Sign In",
@@ -128,7 +130,7 @@ class _Navbar extends StatelessWidget {
           _PrimaryButton(
             text: "Get Started",
             onTap: () {
-              // TODO: Navigate to Register
+              Navigator.pushNamed(context, AppRoutes.register);
             },
           ),
         ],
@@ -286,13 +288,24 @@ class _HeroSection extends StatelessWidget {
                   _PrimaryBigButton(
                     text: "Get Started",
                     onTap: () {
-                      // TODO: Navigate to Register
+                      Navigator.pushNamed(context, AppRoutes.register);
                     },
                   ),
                   _OutlineBigButton(
                     text: "Watch Demo",
                     onTap: () {
-                      // TODO: Open demo dialog/video
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CameraPoseScreen(),
+                                ),
+                              );
+                            },
+                  ),
+                  _OutlineBigButton(
+                    text: "Open Patient Portal",
+                    onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.patientHome);
                     },
                   ),
                 ],
