@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../data/services/therapist_service.dart';
 import '../patient_details/therapist_patient_detail_screen.dart';
 
 class TherapistHomeScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class TherapistHomeScreen extends StatefulWidget {
 
 class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final TherapistService _therapistService = TherapistService();
 
   bool _loading = true;
   String _status = "Loading...";
@@ -25,6 +27,8 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
   String _therapistName = "Therapist";
 
   List<Map<String, dynamic>> _patients = [];
+  int _pendingAlerts   = 0;
+  int _totalSessions   = 0;
 
   @override
   void initState() {
@@ -74,27 +78,37 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
 
       _therapistName = therapistProfile["full_name"] ?? "Therapist";
 
-      setState(() {
-        _status = "Fetching assigned patients...";
-      });
+      setState(() => _status = "Fetching patients & stats...");
 
       // 2) Patients assigned to this therapist
-      final patients = await _supabase
-          .from("profiles")
-          .select()
-          .eq("role", "patient")
-          .eq("assigned_therapist_id", user.id)
-          .order("created_at", ascending: false);
+      final patients = await _therapistService.fetchPatients(user.id);
+
+      // 3) Pain alerts (pending only)
+      final alerts = await _therapistService.fetchPainAlerts(user.id);
+
+      // 4) Total sessions across all patients
+      int totalSessions = 0;
+      for (final p in patients) {
+        final pid = p["id"]?.toString();
+        if (pid == null) continue;
+        final sessions = await _supabase
+            .from("session_reports")
+            .select("id")
+            .eq("patient_id", pid);
+        totalSessions += (sessions as List).length;
+      }
 
       setState(() {
-        _patients = List<Map<String, dynamic>>.from(patients);
-        _loading = false;
-        _status = "Loaded successfully ✅";
+        _patients      = patients;
+        _pendingAlerts = alerts.length;
+        _totalSessions = totalSessions;
+        _loading       = false;
+        _status        = "Loaded successfully ✅";
       });
     } catch (e) {
       setState(() {
         _loading = false;
-        _status = "Error: $e";
+        _status  = "Error: $e";
       });
     }
   }
@@ -177,14 +191,14 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                               value: _patients.length.toString(),
                               icon: Icons.people_alt_rounded,
                             ),
-                            const _MiniStatCard(
+                            _MiniStatCard(
                               title: "Pain Alerts",
-                              value: "0",
+                              value: _pendingAlerts.toString(),
                               icon: Icons.warning_rounded,
                             ),
-                            const _MiniStatCard(
+                            _MiniStatCard(
                               title: "Sessions",
-                              value: "0",
+                              value: _totalSessions.toString(),
                               icon: Icons.bar_chart_rounded,
                             ),
                           ],

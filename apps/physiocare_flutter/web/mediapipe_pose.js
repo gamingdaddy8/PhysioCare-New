@@ -1,57 +1,84 @@
-let camera = null;
 let pose = null;
+let videoElement = null;
+let stream = null;
 
-// Flutter will call this and pass the video element id
+function waitForVideo(videoId) {
+  return new Promise((resolve) => {
+    const check = () => {
+      const el = document.getElementById(videoId);
+      if (el) return resolve(el);
+      requestAnimationFrame(check);
+    };
+    check();
+  });
+}
+
+function waitForFlutterCallback() {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (window.onPoseLandmarks) return resolve();
+      requestAnimationFrame(check);
+    };
+    check();
+  });
+}
+
 window.startMediapipePose = async function (videoId) {
-  if (pose) return;
+  console.log("startMediapipePose called");
 
-  const videoElement = document.getElementById(videoId);
+  videoElement = await waitForVideo(videoId);
+  await waitForFlutterCallback();
 
-  if (!videoElement) {
-    console.error("Video element not found:", videoId);
-    return;
-  }
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 640, height: 480 },
+    audio: false,
+  });
 
-  pose = new Pose.Pose({
-    locateFile: (file) =>
-      `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+  videoElement.srcObject = stream;
+  await videoElement.play();
+
+  pose = new Pose({
+    locateFile: (file) => `mediapipe/pose/${file}`,
   });
 
   pose.setOptions({
     modelComplexity: 1,
     smoothLandmarks: true,
     enableSegmentation: false,
-    smoothSegmentation: false,
+    selfieMode: true,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5,
   });
 
   pose.onResults((results) => {
-    if (results.poseLandmarks) {
-      if (window.onPoseLandmarks) {
-        window.onPoseLandmarks(results.poseLandmarks);
-      }
+    if (results.poseLandmarks && window.onPoseLandmarks) {
+      window.onPoseLandmarks(results.poseLandmarks);
     }
   });
 
-  camera = new Camera.Camera(videoElement, {
-    onFrame: async () => {
-      await pose.send({ image: videoElement });
-    },
-    width: 640,
-    height: 480,
-  });
+  async function frameLoop() {
+    if (!pose || !videoElement) return;
+    await pose.send({ image: videoElement });
+    requestAnimationFrame(frameLoop);
+  }
 
-  camera.start();
+  frameLoop();
 };
 
 window.stopMediapipePose = function () {
-  if (camera) {
-    camera.stop();
-    camera = null;
-  }
   if (pose) {
     pose.close();
     pose = null;
+  }
+
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+
+  if (videoElement) {
+    videoElement.pause();
+    videoElement.srcObject = null;
+    videoElement = null;
   }
 };

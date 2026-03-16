@@ -1,0 +1,12 @@
+/*
+  Content-Type: application/javascript; charset=utf-8
+  X-Content-Type-Options: nosniff
+
+/mediapipe/pose/*.wasm
+  Content-Type: application/wasm
+
+/mediapipe/pose/*.data
+  Content-Type: application/octet-stream
+
+/mediapipe/pose/*.tflite
+  Content-Type: application/octet-stream

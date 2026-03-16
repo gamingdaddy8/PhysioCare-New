@@ -1,23 +1,25 @@
 import 'dart:convert';
-import 'package:js/js.dart';
+import 'dart:js_interop';
 
 @JS('startMediapipePose')
-external Future<void> startMediapipePose(String videoId);
+external JSPromise startMediapipePose(String videoId);
 
 @JS('stopMediapipePose')
 external void stopMediapipePose();
 
 @JS('onPoseLandmarks')
-external set onPoseLandmarks(dynamic f);
+external set onPoseLandmarks(JSFunction f);
 
 class WebMediapipeBridge {
   static void init(void Function(List<dynamic> landmarks) onLandmarks) {
-    onPoseLandmarks = allowInteropCaptureThis((_, landmarks) {
+    onPoseLandmarks = ((JSAny? landmarks) {
       try {
-        final jsonString = jsonEncode(landmarks);
+        final dartObj = landmarks?.dartify();
+        if (dartObj == null) return;
+        final jsonString = jsonEncode(dartObj);
         final decoded = jsonDecode(jsonString) as List<dynamic>;
         onLandmarks(decoded);
       } catch (_) {}
-    });
+    }).toJS;
   }
 }

@@ -12,7 +12,6 @@ import '../../features/pose/pose_detector/camera_pose_screen.dart';
 import '../../features/pose/session/exercise_session_screen.dart';
 
 import '../../features/therapist/home/therapist_home_screen.dart';
-import '../../features/therapist/patient_details/therapist_patient_detail_screen.dart';
 
 class AppRoutes {
   static const splash = "/";
@@ -32,7 +31,6 @@ class AppRoutes {
   static const poseTest = "/pose-test";
   static const exerciseSession = "/exercise-session";
 
-
   static Map<String, WidgetBuilder> routes = {
     // First screen
     splash: (context) => const LandingScreen(),
@@ -51,13 +49,13 @@ class AppRoutes {
           body: Center(child: Text("Schedule page (TODO)")),
         ),
 
-    // Therapist Portal (placeholder for now)
+    // Therapist Portal
     therapistHome: (context) => const TherapistHomeScreen(),
 
-    // Pose test (old screen kept for testing)
+    // Pose screen (this internally decides Web vs Mobile later)
     poseTest: (context) => const CameraPoseScreen(),
 
-    // New Web Exercise Session UI
+    // Exercise session UI
     exerciseSession: (context) => const ExerciseSessionScreen(),
   };
 }
