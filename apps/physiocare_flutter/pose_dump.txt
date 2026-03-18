@@ -1,0 +1,2534 @@
+﻿========== angle_utils.dart ==========
+
+========== feedback_engine.dart ==========
+
+========== camera_pose_screen.dart ==========
+import 'package:flutter/material.dart';
+import 'pose_view.dart';
+
+class CameraPoseScreen extends StatelessWidget {
+  const CameraPoseScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(
+        child: PoseView(),
+      ),
+    );
+  }
+}
+
+========== camera_pose_view.dart ==========
+import 'dart:async';
+import 'dart:ui';
+import 'dart:math';
+
+import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
+import 'package:google_mlkit_commons/google_mlkit_commons.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
+import '../rep_counter/bicep_curl_counter.dart';
+import '../rep_counter/side_raise_logic.dart';
+import '../rep_counter/squat_logic.dart';
+
+import 'mlkit_pose_service.dart';
+import 'pose_painter.dart';
+
+enum ExerciseType {
+  bicepCurl,
+  sideRaise,
+  squats,
+}
+
+class CameraPoseView extends StatefulWidget {
+  const CameraPoseView({
+    super.key,
+    this.showOverlayUI = true,
+    this.initialExercise = ExerciseType.bicepCurl,
+    this.onExerciseChanged,
+  });
+
+  /// If false, only camera + skeleton will be shown.
+  final bool showOverlayUI;
+
+  /// Preselect exercise when opening this view.
+  final ExerciseType initialExercise;
+
+  /// Optional callback when exercise changes from dropdown.
+  final ValueChanged<ExerciseType>? onExerciseChanged;
+
+  @override
+  State<CameraPoseView> createState() => _CameraPoseViewState();
+}
+
+class _CameraPoseViewState extends State<CameraPoseView> {
+  CameraController? _cameraController;
+  late final MLKitPoseService _poseService;
+
+  bool _isBusy = false;
+  bool _isStreaming = false;
+
+  String _status = "Initializing...";
+  Pose? _lastPose;
+
+  // ==========================
+  // Feedback System (TEXT)
+  // ==========================
+  String _feedbackText = "Get into position...";
+  Color _feedbackColor = Colors.white;
+
+  double _liveAccuracy = 0;
+  double _sessionAccuracySum = 0;
+  int _sessionAccuracyCount = 0;
+
+  DateTime _lastFeedbackTime = DateTime.fromMillisecondsSinceEpoch(0);
+  final Duration _feedbackCooldown = const Duration(milliseconds: 800);
+
+  // ==========================
+  // UI Throttling (reduce lag)
+  // ==========================
+  DateTime _lastPoseUiUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  final Duration _poseUiCooldown = const Duration(milliseconds: 120);
+
+  // ==========================
+  // Exercise Selection
+  // ==========================
+  late ExerciseType _selectedExercise = widget.initialExercise;
+
+  // ==========================
+  // Exercise Logic Objects
+  // ==========================
+  final BicepCurlCounter _bicepCounter = BicepCurlCounter();
+  final SideRaiseLogic _sideRaiseLogic = SideRaiseLogic();
+  final SquatLogic _squatLogic = SquatLogic();
+
+  @override
+  void initState() {
+    super.initState();
+    _poseService = MLKitPoseService();
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      final cameras = await availableCameras();
+
+      final selectedCamera = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      _cameraController = CameraController(
+        selectedCamera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.nv21,
+      );
+
+      await _cameraController!.initialize();
+      if (!mounted) return;
+
+      setState(() {
+        _status = "Camera started âœ…";
+      });
+
+      _isStreaming = true;
+
+      await _cameraController!.startImageStream((CameraImage image) async {
+        if (!_isStreaming) return;
+        if (_isBusy) return;
+
+        _isBusy = true;
+
+        try {
+          final inputImage = _inputImageFromCameraImage(image);
+          final poses = await _poseService.processImage(inputImage);
+
+          if (!mounted) return;
+
+          if (poses.isNotEmpty) {
+            final pose = poses.first;
+
+            // Keep latest pose for exercise logic
+            _lastPose = pose;
+            _updateAccuracy(pose);
+
+            // ==========================
+            // Update Selected Exercise Logic
+            // ==========================
+            if (_selectedExercise == ExerciseType.bicepCurl) {
+              _bicepCounter.update(pose);
+            } else if (_selectedExercise == ExerciseType.sideRaise) {
+              _sideRaiseLogic.update(pose);
+            } else if (_selectedExercise == ExerciseType.squats) {
+              _squatLogic.update(pose);
+            }
+
+            // Feedback is throttled internally
+            _updateFeedback();
+
+            // ==========================
+            // Throttle UI rebuilds
+            // ==========================
+            final now = DateTime.now();
+            if (now.difference(_lastPoseUiUpdate) > _poseUiCooldown) {
+              _lastPoseUiUpdate = now;
+
+              // Update status only if changed
+              if (_status != "Pose detected âœ…") {
+                setState(() {
+                  _status = "Pose detected âœ…";
+                });
+              } else {
+                // Force repaint for skeleton at throttled rate
+                setState(() {});
+              }
+            }
+          } else {
+            if (_status != "No pose detected...") {
+              setState(() {
+                _status = "No pose detected...";
+                _lastPose = null;
+              });
+            } else {
+              _lastPose = null;
+            }
+          }
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _status = "Error: $e";
+          });
+        } finally {
+          _isBusy = false;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _status = "Camera init failed: $e";
+      });
+    }
+  }
+
+  // ==========================================
+  // ML KIT INPUT IMAGE (NV21)
+  // ==========================================
+  InputImage _inputImageFromCameraImage(CameraImage image) {
+    final camera = _cameraController!.description;
+
+    final rotation = InputImageRotationValue.fromRawValue(
+          camera.sensorOrientation,
+        ) ??
+        InputImageRotation.rotation0deg;
+
+    final format = InputImageFormatValue.fromRawValue(image.format.raw) ??
+        InputImageFormat.nv21;
+
+    if (format != InputImageFormat.nv21) {
+      throw Exception("Image format is not NV21 (found: $format)");
+    }
+
+    final bytes = image.planes.first.bytes;
+
+    final metadata = InputImageMetadata(
+      size: Size(image.width.toDouble(), image.height.toDouble()),
+      rotation: rotation,
+      format: format,
+      bytesPerRow: image.planes.first.bytesPerRow,
+    );
+
+    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
+  }
+
+  Future<void> _stopCamera() async {
+    try {
+      _isStreaming = false;
+      if (_cameraController != null &&
+          _cameraController!.value.isStreamingImages) {
+        await _cameraController!.stopImageStream();
+      }
+    } catch (_) {}
+  }
+
+  void _resetExercise() {
+    setState(() {
+      _liveAccuracy = 0;
+      _sessionAccuracySum = 0;
+      _sessionAccuracyCount = 0;
+
+      _bicepCounter.reset();
+      _sideRaiseLogic.reset();
+      _squatLogic.reset();
+    });
+  }
+
+  @override
+  void dispose() {
+    _stopCamera();
+    _cameraController?.dispose();
+    _poseService.dispose();
+    super.dispose();
+  }
+
+  // ==========================================
+  // FEEDBACK SYSTEM (TEXT ONLY for now)
+  // ==========================================
+  void _updateFeedback() {
+    // Cooldown so it doesn't change 30 times per second
+    final now = DateTime.now();
+    if (now.difference(_lastFeedbackTime) < _feedbackCooldown) return;
+    _lastFeedbackTime = now;
+
+    String msg = "";
+    Color color = Colors.white;
+
+    // Safety check
+    if (_lastPose == null) {
+      msg = "No pose detected...";
+      color = Colors.orangeAccent;
+    } else {
+      // ==========================
+      // BICEP CURL FEEDBACK
+      // ==========================
+      if (_selectedExercise == ExerciseType.bicepCurl) {
+        final l = _bicepCounter.leftAngle;
+        final r = _bicepCounter.rightAngle;
+
+        // Basic form feedback using angles
+        if (l == 0 && r == 0) {
+          msg = "Bring arms into view";
+          color = Colors.orangeAccent;
+        } else if (l < 70 || r < 70) {
+          msg = "Good! Curl up fully ðŸ’ª";
+          color = Colors.greenAccent;
+        } else if (l > 150 && r > 150) {
+          msg = "Now curl up";
+          color = Colors.white;
+        } else {
+          msg = "Control the movement";
+          color = Colors.white70;
+        }
+      }
+
+      // ==========================
+      // SIDE RAISE FEEDBACK
+      // ==========================
+      else if (_selectedExercise == ExerciseType.sideRaise) {
+        final l = _sideRaiseLogic.leftAngle;
+        final r = _sideRaiseLogic.rightAngle;
+
+        if (l == 0 && r == 0) {
+          msg = "Stand in frame with arms visible";
+          color = Colors.orangeAccent;
+        } else if (l > 75 || r > 75) {
+          msg = "Great! Hold at shoulder height ðŸ”¥";
+          color = Colors.greenAccent;
+        } else if (l < 30 && r < 30) {
+          msg = "Raise your arms sideways";
+          color = Colors.white;
+        } else {
+          msg = "Lift higher (towards 90Â°)";
+          color = Colors.white70;
+        }
+      }
+    }
+
+    // Only update UI if message changed (reduces rebuild spam)
+    if (msg != _feedbackText) {
+      setState(() {
+        _feedbackText = msg;
+        _feedbackColor = color;
+      });
+    }
+  }
+
+  // ==========================================
+  // UI HELPERS
+  // ==========================================
+  String _exerciseTitle() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return "Bicep Curl";
+      case ExerciseType.sideRaise:
+        return "Side Raise";
+      case ExerciseType.squats:
+        return "Squats";
+    }
+  }
+
+  int _leftReps() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.leftReps;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.leftReps;
+      case ExerciseType.squats:
+        return _squatLogic.reps;
+    }
+  }
+
+  int _rightReps() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.rightReps;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.rightReps;
+      case ExerciseType.squats:
+        return _squatLogic.reps;
+    }
+  }
+
+  double _computeLiveAccuracy(Pose pose) {
+    // Simple angle-based scoring (0..100)
+    // For mobile we use LEFT + RIGHT and average them when available.
+    if (_selectedExercise == ExerciseType.bicepCurl) {
+      final left = _bicepCounter.leftAngle;
+      final right = _bicepCounter.rightAngle;
+
+      double scoreFor(double angle) {
+        final target = angle < 100 ? 45.0 : 165.0;
+        final diff = (angle - target).abs();
+        return (100 - diff * 1.2).clamp(0, 100);
+      }
+
+      final scores = <double>[];
+      if (left > 0) scores.add(scoreFor(left));
+      if (right > 0) scores.add(scoreFor(right));
+      if (scores.isEmpty) return 0;
+      return scores.reduce((a, b) => a + b) / scores.length;
+    }
+
+    if (_selectedExercise == ExerciseType.sideRaise) {
+      final left = _sideRaiseLogic.leftAngle;
+      final right = _sideRaiseLogic.rightAngle;
+
+      double scoreFor(double angle) {
+        final target = angle > 45 ? 90.0 : 15.0;
+        final diff = (angle - target).abs();
+        return (100 - diff * 1.0).clamp(0, 100);
+      }
+
+      final scores = <double>[];
+      if (left > 0) scores.add(scoreFor(left));
+      if (right > 0) scores.add(scoreFor(right));
+      if (scores.isEmpty) return 0;
+      return scores.reduce((a, b) => a + b) / scores.length;
+    }
+
+    if (_selectedExercise == ExerciseType.squats) {
+      final lh = pose.landmarks[PoseLandmarkType.leftHip];
+      final lk = pose.landmarks[PoseLandmarkType.leftKnee];
+      final la = pose.landmarks[PoseLandmarkType.leftAnkle];
+
+      final rh = pose.landmarks[PoseLandmarkType.rightHip];
+      final rk = pose.landmarks[PoseLandmarkType.rightKnee];
+      final ra = pose.landmarks[PoseLandmarkType.rightAnkle];
+
+      double? kneeAngle;
+
+      if (lh != null && lk != null && la != null) {
+        kneeAngle = _angle3(lh, lk, la);
+      } else if (rh != null && rk != null && ra != null) {
+        kneeAngle = _angle3(rh, rk, ra);
+      }
+
+      if (kneeAngle == null) return 0;
+
+      final target = kneeAngle < 140 ? 95.0 : 170.0;
+      final diff = (kneeAngle - target).abs();
+      return (100 - diff * 0.9).clamp(0, 100);
+    }
+
+    return 0;
+  }
+
+  double _angle3(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
+    final abx = a.x - b.x;
+    final aby = a.y - b.y;
+    final cbx = c.x - b.x;
+    final cby = c.y - b.y;
+
+    final dot = abx * cbx + aby * cby;
+    final magAB = sqrt(abx * abx + aby * aby);
+    final magCB = sqrt(cbx * cbx + cby * cby);
+
+    if (magAB == 0 || magCB == 0) return 180;
+
+    final cosAngle = (dot / (magAB * magCB)).clamp(-1.0, 1.0);
+    final angleRad = acos(cosAngle);
+    return angleRad * (180 / pi);
+  }
+
+  void _updateAccuracy(Pose pose) {
+    final live = _computeLiveAccuracy(pose);
+
+    // Smooth live accuracy
+    _liveAccuracy = (_liveAccuracy * 0.85) + (live * 0.15);
+
+    // Session average
+    _sessionAccuracySum += live;
+    _sessionAccuracyCount += 1;
+  }
+
+  double get _sessionAccuracyAvg {
+    if (_sessionAccuracyCount == 0) return 0;
+    return _sessionAccuracySum / _sessionAccuracyCount;
+  }
+
+  double _leftAngle() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.leftAngle;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.leftAngle;
+      case ExerciseType.squats:
+        return 0;
+    }
+  }
+
+  double _rightAngle() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.rightAngle;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.rightAngle;
+      case ExerciseType.squats:
+        return 0;
+    }
+  }
+
+  String _leftStage() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.leftStage;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.leftStage;
+      case ExerciseType.squats:
+        return _squatLogic.reps > 0 ? "Counting" : "Ready";
+    }
+  }
+
+  String _rightStage() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.rightStage;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.rightStage;
+      case ExerciseType.squats:
+        return _squatLogic.reps > 0 ? "Counting" : "Ready";
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _cameraController;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        color: Colors.black,
+        child: controller != null && controller.value.isInitialized
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  CameraPreview(controller),
+
+                  // Skeleton overlay
+                  if (_lastPose != null)
+                    CustomPaint(
+                      painter: PosePainter(
+                        pose: _lastPose!,
+                        imageSize: Size(
+                          controller.value.previewSize!.height,
+                          controller.value.previewSize!.width,
+                        ),
+                        isFrontCamera: controller.description.lensDirection ==
+                            CameraLensDirection.front,
+                      ),
+                    ),
+
+                  // Overlay UI
+                  if (widget.showOverlayUI)
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Dropdown
+                            Row(
+                              children: [
+                                const Text(
+                                  "Exercise: ",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                DropdownButton<ExerciseType>(
+                                  value: _selectedExercise,
+                                  dropdownColor: Colors.black87,
+                                  style: const TextStyle(color: Colors.white),
+                                  underline: Container(
+                                    height: 1,
+                                    color: Colors.white24,
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: ExerciseType.bicepCurl,
+                                      child: Text("Bicep Curl"),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: ExerciseType.sideRaise,
+                                      child: Text("Side Raise"),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: ExerciseType.squats,
+                                      child: Text("Squats"),
+                                    ),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val == null) return;
+                                    setState(() {
+                                      _selectedExercise = val;
+                                    });
+                                    widget.onExerciseChanged?.call(val);
+                                  },
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  tooltip: "Reset reps",
+                                  onPressed: _resetExercise,
+                                  icon: const Icon(
+                                    Icons.restart_alt,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            // Feedback Card
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Text(
+                                _feedbackText,
+                                style: TextStyle(
+                                  color: _feedbackColor,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            Text(
+                              "Left Reps: ${_leftReps()}   |   Right Reps: ${_rightReps()}\nLive Acc: ${_liveAccuracy.toStringAsFixed(0)}%   |   Avg: ${_sessionAccuracyAvg.toStringAsFixed(0)}%",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+
+                            Text(
+                              "Left Angle: ${_leftAngle().toStringAsFixed(1)}Â°  |  Right Angle: ${_rightAngle().toStringAsFixed(1)}Â°",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+
+                            Text(
+                              "Left: ${_leftStage()}  |  Right: ${_rightStage()}",
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            Text(
+                              _status,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            : const Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
+}
+
+========== camera_view.dart ==========
+
+========== mlkit_pose_service.dart ==========
+import 'dart:ui';
+
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
+class MLKitPoseService {
+  late final PoseDetector _poseDetector;
+
+  MLKitPoseService() {
+    final options = PoseDetectorOptions(
+      mode: PoseDetectionMode.stream,
+      model: PoseDetectionModel.accurate,
+    );
+
+    _poseDetector = PoseDetector(options: options);
+  }
+
+  Future<List<Pose>> processImage(InputImage inputImage) async {
+    return await _poseDetector.processImage(inputImage);
+  }
+
+  Future<void> dispose() async {
+    await _poseDetector.close();
+  }
+}
+
+========== pose_painter.dart ==========
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
+class PosePainter extends CustomPainter {
+  final Pose pose;
+  final Size imageSize;
+  final bool isFrontCamera;
+
+  PosePainter({
+    required this.pose,
+    required this.imageSize,
+    required this.isFrontCamera,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dotPaint = Paint()
+      ..color = Colors.greenAccent
+      ..style = PaintingStyle.fill;
+
+    final linePaint = Paint()
+      ..color = Colors.blueAccent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+
+    /// âœ… Map MLKit image coordinates to preview coordinates
+    Offset _mapPoint(double x, double y) {
+      // scale factors
+      final scaleX = size.width / imageSize.width;
+      final scaleY = size.height / imageSize.height;
+
+      double mappedX = x * scaleX;
+      double mappedY = y * scaleY;
+
+      // âœ… Fix front camera mirror issue
+      if (isFrontCamera) {
+        mappedX = size.width - mappedX;
+      }
+
+      return Offset(mappedX, mappedY);
+    }
+
+    // âœ… Draw all landmarks
+    for (final landmark in pose.landmarks.values) {
+      final p = _mapPoint(landmark.x, landmark.y);
+      canvas.drawCircle(p, 5, dotPaint);
+    }
+
+    // âœ… Draw line helper
+    void drawLine(PoseLandmarkType a, PoseLandmarkType b) {
+      final p1 = pose.landmarks[a];
+      final p2 = pose.landmarks[b];
+      if (p1 == null || p2 == null) return;
+
+      canvas.drawLine(
+        _mapPoint(p1.x, p1.y),
+        _mapPoint(p2.x, p2.y),
+        linePaint,
+      );
+    }
+
+    // âœ… Skeleton connections
+    drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
+    drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
+
+    drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
+    drawLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
+
+    drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
+    drawLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
+
+    drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
+    drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
+
+    drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
+    drawLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
+
+    drawLine(PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee);
+    drawLine(PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle);
+  }
+
+  @override
+  bool shouldRepaint(covariant PosePainter oldDelegate) {
+    return oldDelegate.pose != pose ||
+        oldDelegate.imageSize != imageSize ||
+        oldDelegate.isFrontCamera != isFrontCamera;
+  }
+}
+
+========== pose_view.dart ==========
+import 'package:flutter/material.dart';
+import 'pose_view_stub.dart'
+    if (dart.library.html) 'pose_view_web.dart'
+    if (dart.library.io) 'pose_view_mobile.dart';
+
+abstract class PoseViewBuilder {
+  Widget build();
+}
+
+class PoseView extends StatelessWidget {
+  const PoseView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return createPoseView().build();
+  }
+}
+
+========== pose_view_mobile.dart ==========
+import 'package:flutter/material.dart';
+import 'pose_view.dart';
+import 'camera_pose_view.dart';
+
+class _MobilePoseViewBuilder implements PoseViewBuilder {
+  @override
+  Widget build() => const CameraPoseView();
+}
+
+PoseViewBuilder createPoseView() => _MobilePoseViewBuilder();
+
+========== pose_view_stub.dart ==========
+import 'package:flutter/material.dart';
+import 'pose_view.dart';
+
+PoseViewBuilder createPoseView() {
+  throw UnsupportedError("Platform not supported");
+}
+
+========== unified_pose.dart ==========
+import 'dart:ui';
+
+class UnifiedLandmark {
+  final double x; // normalized 0..1 for web, or image-space for mobile
+  final double y;
+  final double z;
+  final double visibility;
+
+  const UnifiedLandmark({
+    required this.x,
+    required this.y,
+    this.z = 0,
+    this.visibility = 1,
+  });
+}
+
+class UnifiedPose {
+  // MediaPipe pose has 33 landmarks. We'll store by index.
+  final List<UnifiedLandmark> landmarks;
+
+  const UnifiedPose(this.landmarks);
+}
+
+========== unified_pose_painter.dart ==========
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'unified_pose.dart';
+
+class UnifiedPosePainter extends CustomPainter {
+  final UnifiedPose pose;
+  final Size sourceSize; // size of the original video/frame
+  final bool isNormalized; // true for MediaPipe (0..1)
+
+  UnifiedPosePainter({
+    required this.pose,
+    required this.sourceSize,
+    required this.isNormalized,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.greenAccent
+      ..style = PaintingStyle.fill;
+
+    final linePaint = Paint()
+      ..color = Colors.greenAccent
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    Offset? p(int idx) {
+      if (idx < 0 || idx >= pose.landmarks.length) return null;
+      final lm = pose.landmarks[idx];
+      if (lm.visibility < 0.3) return null;
+
+      final dx = isNormalized ? lm.x * size.width : (lm.x / sourceSize.width) * size.width;
+      final dy = isNormalized ? lm.y * size.height : (lm.y / sourceSize.height) * size.height;
+
+      return Offset(dx, dy);
+    }
+
+    void drawPoint(int idx) {
+      final pt = p(idx);
+      if (pt == null) return;
+      canvas.drawCircle(pt, 4, paint);
+    }
+
+    void drawLine(int a, int b) {
+      final pa = p(a);
+      final pb = p(b);
+      if (pa == null || pb == null) return;
+      canvas.drawLine(pa, pb, linePaint);
+    }
+
+    // MediaPipe Pose landmark indices
+    // 0 nose, 11 leftShoulder, 12 rightShoulder, 13 leftElbow, 14 rightElbow
+    // 15 leftWrist, 16 rightWrist, 23 leftHip, 24 rightHip, 25 leftKnee, 26 rightKnee
+    // 27 leftAnkle, 28 rightAnkle
+
+    // Torso
+    drawLine(11, 12);
+    drawLine(11, 23);
+    drawLine(12, 24);
+    drawLine(23, 24);
+
+    // Left arm
+    drawLine(11, 13);
+    drawLine(13, 15);
+
+    // Right arm
+    drawLine(12, 14);
+    drawLine(14, 16);
+
+    // Left leg
+    drawLine(23, 25);
+    drawLine(25, 27);
+
+    // Right leg
+    drawLine(24, 26);
+    drawLine(26, 28);
+
+    // Draw key points
+    for (final idx in [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
+      drawPoint(idx);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant UnifiedPosePainter oldDelegate) {
+    return oldDelegate.pose != pose;
+  }
+}
+
+========== unified_pose_utils.dart ==========
+import 'dart:math';
+import 'unified_pose.dart';
+
+class UnifiedPoseUtils {
+  static UnifiedLandmark? lm(UnifiedPose pose, int idx) {
+    if (idx < 0 || idx >= pose.landmarks.length) return null;
+    return pose.landmarks[idx];
+  }
+
+  static double angleFrom3(UnifiedLandmark a, UnifiedLandmark b, UnifiedLandmark c) {
+    final abx = a.x - b.x;
+    final aby = a.y - b.y;
+    final cbx = c.x - b.x;
+    final cby = c.y - b.y;
+
+    final dot = abx * cbx + aby * cby;
+    final magAB = sqrt(abx * abx + aby * aby);
+    final magCB = sqrt(cbx * cbx + cby * cby);
+
+    if (magAB == 0 || magCB == 0) return 180;
+
+    final cosAngle = (dot / (magAB * magCB)).clamp(-1.0, 1.0);
+    final angleRad = acos(cosAngle);
+    return angleRad * (180 / pi);
+  }
+
+  static bool visible(UnifiedLandmark? lm, {double min = 0.3}) {
+    if (lm == null) return false;
+    return lm.visibility >= min;
+  }
+}
+
+========== web_bicep_curl_logic.dart ==========
+import 'unified_pose.dart';
+import 'unified_pose_utils.dart';
+
+class WebBicepCurlLogic {
+  int reps = 0;
+  bool _isUp = false;
+
+  final double upThreshold;
+  final double downThreshold;
+
+  WebBicepCurlLogic({
+    this.upThreshold = 55,
+    this.downThreshold = 155,
+  });
+
+  void reset() {
+    reps = 0;
+    _isUp = false;
+  }
+
+  /// Uses LEFT arm only (MediaPipe indices)
+  /// shoulder=11, elbow=13, wrist=15
+  String? update(UnifiedPose pose) {
+    final s = UnifiedPoseUtils.lm(pose, 11);
+    final e = UnifiedPoseUtils.lm(pose, 13);
+    final w = UnifiedPoseUtils.lm(pose, 15);
+
+    if (!UnifiedPoseUtils.visible(s) ||
+        !UnifiedPoseUtils.visible(e) ||
+        !UnifiedPoseUtils.visible(w)) {
+      return "Keep your left arm visible";
+    }
+
+    final angle = UnifiedPoseUtils.angleFrom3(s!, e!, w!);
+
+    // down -> up -> down
+    if (!_isUp && angle < upThreshold) {
+      _isUp = true;
+      return "Good! Now extend";
+    }
+
+    if (_isUp && angle > downThreshold) {
+      reps += 1;
+      _isUp = false;
+      return "Nice rep!";
+    }
+
+    if (!_isUp && angle < 90) return "Curl higher";
+    return null;
+  }
+}
+
+========== web_camera_preview.dart ==========
+import 'dart:html' as html;
+import 'dart:ui_web' as ui;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+class WebCameraPreview extends StatelessWidget {
+  final String viewId;
+
+  const WebCameraPreview({super.key, required this.viewId});
+
+  static final Set<String> _registered = {};
+
+  void _register() {
+    if (_registered.contains(viewId)) return;
+    _registered.add(viewId);
+
+    // ignore: undefined_prefixed_name
+    ui.platformViewRegistry.registerViewFactory(viewId, (int id) {
+      final video = html.VideoElement()
+        ..id = viewId
+        ..autoplay = true
+        ..muted = true
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+
+      return video;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb) return const SizedBox();
+
+    _register();
+
+    return HtmlElementView(viewType: viewId);
+  }
+}
+
+========== web_mediapipe_bridge.dart ==========
+import 'dart:convert';
+import 'package:js/js.dart';
+
+@JS('startMediapipePose')
+external Future<void> startMediapipePose(String videoId);
+
+@JS('stopMediapipePose')
+external void stopMediapipePose();
+
+@JS('onPoseLandmarks')
+external set onPoseLandmarks(dynamic f);
+
+class WebMediapipeBridge {
+  static void init(void Function(List<dynamic> landmarks) onLandmarks) {
+    onPoseLandmarks = allowInteropCaptureThis((_, landmarks) {
+      try {
+        final jsonString = jsonEncode(landmarks);
+        final decoded = jsonDecode(jsonString) as List<dynamic>;
+        onLandmarks(decoded);
+      } catch (_) {}
+    });
+  }
+}
+
+========== web_pose_view.dart ==========
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import 'web_mediapipe_bridge.dart';
+import 'web_camera_preview.dart';
+import 'unified_pose.dart';
+import 'unified_pose_painter.dart';
+import 'unified_pose_utils.dart';
+import 'web_bicep_curl_logic.dart';
+import 'web_side_raise_logic.dart';
+import 'web_squat_logic.dart';
+
+enum ExerciseType {
+  bicepCurl,
+  sideRaise,
+  squats,
+}
+
+class WebPoseView extends StatefulWidget {
+  const WebPoseView({super.key});
+
+  @override
+  State<WebPoseView> createState() => _WebPoseViewState();
+}
+
+class _WebPoseViewState extends State<WebPoseView> {
+  ExerciseType _selectedExercise = ExerciseType.bicepCurl;
+
+  final WebBicepCurlLogic _bicepCounter = WebBicepCurlLogic();
+  final WebSideRaiseLogic _sideRaiseLogic = WebSideRaiseLogic();
+  final WebSquatLogic _squatLogic = WebSquatLogic();
+
+  UnifiedPose? _lastPose;
+
+  String _feedback = "Waiting for pose...";
+
+  double _liveAccuracy = 0;
+  double _sessionAccuracySum = 0;
+  int _sessionAccuracyCount = 0;
+  DateTime _lastFeedbackTime = DateTime.fromMillisecondsSinceEpoch(0);
+  final Duration _feedbackCooldown = const Duration(milliseconds: 350);
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (!kIsWeb) return;
+
+    WebMediapipeBridge.init((landmarks) {
+      if (!mounted) return;
+
+      // landmarks is a List of 33 maps: {x,y,z,visibility}
+      final list = landmarks
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .map(
+            (m) => UnifiedLandmark(
+              x: (m["x"] ?? 0).toDouble(),
+              y: (m["y"] ?? 0).toDouble(),
+              z: (m["z"] ?? 0).toDouble(),
+              visibility: (m["visibility"] ?? 1).toDouble(),
+            ),
+          )
+          .toList();
+
+      final pose = UnifiedPose(list);
+
+      setState(() => _lastPose = pose);
+
+      _updateLogic(pose);
+      _updateAccuracy(pose);
+      _updateFeedback();
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await startMediapipePose('mp-video');
+    });
+  }
+
+  @override
+  void dispose() {
+    if (kIsWeb) {
+      stopMediapipePose();
+    }
+    super.dispose();
+  }
+
+  void _updateLogic(UnifiedPose pose) {
+    String? msg;
+
+    if (_selectedExercise == ExerciseType.bicepCurl) {
+      msg = _bicepCounter.update(pose);
+    } else if (_selectedExercise == ExerciseType.sideRaise) {
+      msg = _sideRaiseLogic.update(pose);
+    } else if (_selectedExercise == ExerciseType.squats) {
+      msg = _squatLogic.update(pose);
+    }
+
+    if (msg != null && msg.trim().isNotEmpty) {
+      final now = DateTime.now();
+      if (now.difference(_lastFeedbackTime) >= _feedbackCooldown) {
+        _lastFeedbackTime = now;
+        setState(() => _feedback = msg!);
+      }
+    }
+  }
+
+  void _updateFeedback() {
+    if (_lastPose == null) return;
+
+    // If no feedback has been set yet, show a default
+    if (_feedback == "Waiting for pose...") {
+      setState(() => _feedback = "Pose detected âœ… Start moving");
+    }
+  }
+
+  String _exerciseName() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return "Bicep Curl";
+      case ExerciseType.sideRaise:
+        return "Side Raise";
+      case ExerciseType.squats:
+        return "Squats";
+    }
+  }
+
+  void _reset() {
+    _bicepCounter.reset();
+    _sideRaiseLogic.reset();
+    _squatLogic.reset();
+  }
+
+    double _computeLiveAccuracy(UnifiedPose pose) {
+    // Simple angle-based scoring (0..100)
+    double score = 0;
+
+    if (_selectedExercise == ExerciseType.bicepCurl) {
+      final s = UnifiedPoseUtils.lm(pose, 11);
+      final e = UnifiedPoseUtils.lm(pose, 13);
+      final w = UnifiedPoseUtils.lm(pose, 15);
+      if (!UnifiedPoseUtils.visible(s) || !UnifiedPoseUtils.visible(e) || !UnifiedPoseUtils.visible(w)) return 0;
+      final angle = UnifiedPoseUtils.angleFrom3(s!, e!, w!);
+
+      // Ideal "up" angle ~45, ideal "down" ~165
+      // We'll score based on closeness to either end depending on stage.
+      final target = (_bicepCounter.reps % 2 == 0) ? 45.0 : 165.0;
+      final diff = (angle - target).abs();
+      score = (100 - diff * 1.2).clamp(0, 100);
+    } else if (_selectedExercise == ExerciseType.sideRaise) {
+      final hip = UnifiedPoseUtils.lm(pose, 23);
+      final sh = UnifiedPoseUtils.lm(pose, 11);
+      final el = UnifiedPoseUtils.lm(pose, 13);
+      if (!UnifiedPoseUtils.visible(hip) || !UnifiedPoseUtils.visible(sh) || !UnifiedPoseUtils.visible(el)) return 0;
+      final angle = UnifiedPoseUtils.angleFrom3(hip!, sh!, el!);
+
+      // Ideal top ~90, bottom ~15
+      final target = (_sideRaiseLogic.reps % 2 == 0) ? 90.0 : 15.0;
+      final diff = (angle - target).abs();
+      score = (100 - diff * 1.0).clamp(0, 100);
+    } else if (_selectedExercise == ExerciseType.squats) {
+      final hip = UnifiedPoseUtils.lm(pose, 23);
+      final knee = UnifiedPoseUtils.lm(pose, 25);
+      final ankle = UnifiedPoseUtils.lm(pose, 27);
+      if (!UnifiedPoseUtils.visible(hip) || !UnifiedPoseUtils.visible(knee) || !UnifiedPoseUtils.visible(ankle)) return 0;
+      final angle = UnifiedPoseUtils.angleFrom3(hip!, knee!, ankle!);
+
+      // Ideal down ~95, up ~170
+      final target = (_squatLogic.reps % 2 == 0) ? 95.0 : 170.0;
+      final diff = (angle - target).abs();
+      score = (100 - diff * 0.9).clamp(0, 100);
+    }
+
+    return score;
+  }
+
+  void _updateAccuracy(UnifiedPose pose) {
+    final live = _computeLiveAccuracy(pose);
+
+    // Smooth live accuracy
+    _liveAccuracy = (_liveAccuracy * 0.85) + (live * 0.15);
+
+    // Session average
+    _sessionAccuracySum += live;
+    _sessionAccuracyCount += 1;
+  }
+
+  double get _sessionAccuracyAvg {
+    if (_sessionAccuracyCount == 0) return 0;
+    return _sessionAccuracySum / _sessionAccuracyCount;
+  }
+
+  int _currentReps() {
+    switch (_selectedExercise) {
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.reps;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.reps;
+      case ExerciseType.squats:
+        return _squatLogic.reps;
+    }
+  }
+
+@override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0B0F),
+      appBar: AppBar(
+        title: Text("Pose (Web) â€” ${_exerciseName()}"),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<ExerciseType>(
+                    value: _selectedExercise,
+                    items: const [
+                      DropdownMenuItem(
+                        value: ExerciseType.bicepCurl,
+                        child: Text("Bicep Curl"),
+                      ),
+                      DropdownMenuItem(
+                        value: ExerciseType.sideRaise,
+                        child: Text("Side Raise"),
+                      ),
+                      DropdownMenuItem(
+                        value: ExerciseType.squats,
+                        child: Text("Squats"),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _selectedExercise = v);
+                      _reset();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Container(
+                  color: Colors.black,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Web camera preview (real video)
+                      const WebCameraPreview(viewId: 'mp-video'),
+
+                      // Skeleton overlay
+                      if (_lastPose != null)
+                        CustomPaint(
+                          painter: UnifiedPosePainter(
+                            pose: _lastPose!,
+                            sourceSize: const Size(640, 480),
+                            isNormalized: true,
+                          ),
+                        ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Text(
+                            "Reps: ${_currentReps()}\nAcc: ${_liveAccuracy.toStringAsFixed(0)}%",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          color: Colors.black54,
+                          child: Text(
+                            _feedback + "   |   Avg: ${_sessionAccuracyAvg.toStringAsFixed(0)}%",
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+========== web_side_raise_logic.dart ==========
+import 'unified_pose.dart';
+import 'unified_pose_utils.dart';
+
+class WebSideRaiseLogic {
+  int reps = 0;
+  bool _isUp = false;
+
+  // shoulder angle threshold
+  final double upThreshold;
+  final double downThreshold;
+
+  WebSideRaiseLogic({
+    this.upThreshold = 60,
+    this.downThreshold = 25,
+  });
+
+  void reset() {
+    reps = 0;
+    _isUp = false;
+  }
+
+  /// Uses LEFT arm only
+  /// hip=23, shoulder=11, elbow=13
+  String? update(UnifiedPose pose) {
+    final hip = UnifiedPoseUtils.lm(pose, 23);
+    final sh = UnifiedPoseUtils.lm(pose, 11);
+    final el = UnifiedPoseUtils.lm(pose, 13);
+
+    if (!UnifiedPoseUtils.visible(hip) ||
+        !UnifiedPoseUtils.visible(sh) ||
+        !UnifiedPoseUtils.visible(el)) {
+      return "Keep your left side visible";
+    }
+
+    // Angle at shoulder between hip-shoulder-elbow
+    final angle = UnifiedPoseUtils.angleFrom3(hip!, sh!, el!);
+
+    // down -> up -> down
+    if (!_isUp && angle > upThreshold) {
+      _isUp = true;
+      return "Good! Now lower slowly";
+    }
+
+    if (_isUp && angle < downThreshold) {
+      reps += 1;
+      _isUp = false;
+      return "Nice rep!";
+    }
+
+    if (!_isUp && angle > 40) return "Raise a bit more";
+    return null;
+  }
+}
+
+========== web_squat_logic.dart ==========
+import 'unified_pose.dart';
+import 'unified_pose_utils.dart';
+
+class WebSquatLogic {
+  int reps = 0;
+  bool _isDown = false;
+
+  final double downThreshold;
+  final double upThreshold;
+
+  WebSquatLogic({
+    this.downThreshold = 110,
+    this.upThreshold = 160,
+  });
+
+  void reset() {
+    reps = 0;
+    _isDown = false;
+  }
+
+  /// Uses LEFT leg only
+  /// hip=23, knee=25, ankle=27
+  String? update(UnifiedPose pose) {
+    final hip = UnifiedPoseUtils.lm(pose, 23);
+    final knee = UnifiedPoseUtils.lm(pose, 25);
+    final ankle = UnifiedPoseUtils.lm(pose, 27);
+
+    if (!UnifiedPoseUtils.visible(hip) ||
+        !UnifiedPoseUtils.visible(knee) ||
+        !UnifiedPoseUtils.visible(ankle)) {
+      return "Keep your left leg visible";
+    }
+
+    final angle = UnifiedPoseUtils.angleFrom3(hip!, knee!, ankle!);
+
+    if (!_isDown && angle < downThreshold) {
+      _isDown = true;
+      return "Good! Now stand up";
+    }
+
+    if (_isDown && angle > upThreshold) {
+      reps += 1;
+      _isDown = false;
+      return "Nice squat!";
+    }
+
+    if (!_isDown && angle < 140) return "Go a bit lower";
+    return null;
+  }
+}
+
+========== bicep_curl_counter.dart ==========
+import 'dart:math';
+
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
+class BicepCurlCounter {
+  // ==========================
+  // SETTINGS (TUNE THESE)
+  // ==========================
+  final double upAngle = 60;     // arm bent
+  final double downAngle = 160;  // arm straight
+
+  // ==========================
+  // STATE
+  // ==========================
+  int leftReps = 0;
+  int rightReps = 0;
+
+  String leftStage = "down";
+  String rightStage = "down";
+
+  double leftAngle = 0;
+  double rightAngle = 0;
+
+  // ==========================
+  // MAIN UPDATE FUNCTION
+  // ==========================
+  void update(Pose pose) {
+    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
+    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
+
+    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+
+    // LEFT ARM
+    if (leftShoulder != null && leftElbow != null && leftWrist != null) {
+      leftAngle = _calculateAngle(
+        leftShoulder.x,
+        leftShoulder.y,
+        leftElbow.x,
+        leftElbow.y,
+        leftWrist.x,
+        leftWrist.y,
+      );
+
+      // Stage logic
+      if (leftAngle > downAngle) {
+        leftStage = "down";
+      }
+
+      if (leftAngle < upAngle && leftStage == "down") {
+        leftStage = "up";
+        leftReps++;
+      }
+    }
+
+    // RIGHT ARM
+    if (rightShoulder != null && rightElbow != null && rightWrist != null) {
+      rightAngle = _calculateAngle(
+        rightShoulder.x,
+        rightShoulder.y,
+        rightElbow.x,
+        rightElbow.y,
+        rightWrist.x,
+        rightWrist.y,
+      );
+
+      // Stage logic
+      if (rightAngle > downAngle) {
+        rightStage = "down";
+      }
+
+      if (rightAngle < upAngle && rightStage == "down") {
+        rightStage = "up";
+        rightReps++;
+      }
+    }
+  }
+
+  void reset() {
+    leftReps = 0;
+    rightReps = 0;
+    leftStage = "down";
+    rightStage = "down";
+    leftAngle = 0;
+    rightAngle = 0;
+  }
+
+  // ==========================
+  // ANGLE CALCULATION
+  // ==========================
+  double _calculateAngle(
+    double ax,
+    double ay,
+    double bx,
+    double by,
+    double cx,
+    double cy,
+  ) {
+    // angle ABC (B = elbow)
+    final abx = ax - bx;
+    final aby = ay - by;
+
+    final cbx = cx - bx;
+    final cby = cy - by;
+
+    final dot = (abx * cbx) + (aby * cby);
+    final magAB = sqrt(abx * abx + aby * aby);
+    final magCB = sqrt(cbx * cbx + cby * cby);
+
+    final cosAngle = dot / (magAB * magCB);
+    final angle = acos(cosAngle.clamp(-1.0, 1.0));
+
+    return angle * (180 / pi);
+  }
+}
+
+========== side_raise_logic.dart ==========
+import 'dart:math';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
+class SideRaiseLogic {
+  int leftReps = 0;
+  int rightReps = 0;
+
+  double leftAngle = 0;
+  double rightAngle = 0;
+
+  String leftStage = "down";
+  String rightStage = "down";
+
+  // Thresholds
+  final double upThreshold;
+  final double downThreshold;
+  final double smoothFactor;
+
+  double _leftSmoothed = 0;
+  double _rightSmoothed = 0;
+
+  SideRaiseLogic({
+    this.upThreshold = 80,
+    this.downThreshold = 35,
+    this.smoothFactor = 0.7,
+  });
+
+  void reset() {
+    leftReps = 0;
+    rightReps = 0;
+    leftAngle = 0;
+    rightAngle = 0;
+    leftStage = "down";
+    rightStage = "down";
+    _leftSmoothed = 0;
+    _rightSmoothed = 0;
+  }
+
+  void update(Pose pose) {
+    _updateLeft(pose);
+    _updateRight(pose);
+  }
+
+  // LEFT ARM: Hip -> Shoulder -> Elbow
+  void _updateLeft(Pose pose) {
+    final hip = pose.landmarks[PoseLandmarkType.leftHip];
+    final shoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final elbow = pose.landmarks[PoseLandmarkType.leftElbow];
+
+    if (hip == null || shoulder == null || elbow == null) return;
+
+    final raw = _calculateAngle(
+      hip.x, hip.y,
+      shoulder.x, shoulder.y,
+      elbow.x, elbow.y,
+    );
+
+    _leftSmoothed = (_leftSmoothed == 0)
+        ? raw
+        : (_leftSmoothed * smoothFactor) + (raw * (1 - smoothFactor));
+
+    leftAngle = _leftSmoothed;
+
+    if (leftAngle < downThreshold) {
+      leftStage = "down";
+    }
+
+    if (leftAngle > upThreshold && leftStage == "down") {
+      leftStage = "up";
+      leftReps++;
+    }
+  }
+
+  // RIGHT ARM: Hip -> Shoulder -> Elbow
+  void _updateRight(Pose pose) {
+    final hip = pose.landmarks[PoseLandmarkType.rightHip];
+    final shoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final elbow = pose.landmarks[PoseLandmarkType.rightElbow];
+
+    if (hip == null || shoulder == null || elbow == null) return;
+
+    final raw = _calculateAngle(
+      hip.x, hip.y,
+      shoulder.x, shoulder.y,
+      elbow.x, elbow.y,
+    );
+
+    _rightSmoothed = (_rightSmoothed == 0)
+        ? raw
+        : (_rightSmoothed * smoothFactor) + (raw * (1 - smoothFactor));
+
+    rightAngle = _rightSmoothed;
+
+    if (rightAngle < downThreshold) {
+      rightStage = "down";
+    }
+
+    if (rightAngle > upThreshold && rightStage == "down") {
+      rightStage = "up";
+      rightReps++;
+    }
+  }
+
+  double _calculateAngle(
+    double ax, double ay,
+    double bx, double by,
+    double cx, double cy,
+  ) {
+    final abx = ax - bx;
+    final aby = ay - by;
+    final cbx = cx - bx;
+    final cby = cy - by;
+
+    final dot = (abx * cbx) + (aby * cby);
+    final magAB = sqrt(abx * abx + aby * aby);
+    final magCB = sqrt(cbx * cbx + cby * cby);
+
+    if (magAB == 0 || magCB == 0) return 0;
+
+    final cosAngle = (dot / (magAB * magCB)).clamp(-1.0, 1.0);
+    final angleRad = acos(cosAngle);
+
+    return angleRad * (180 / pi);
+  }
+}
+
+========== squat_logic.dart ==========
+import 'dart:math';
+
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
+class SquatLogic {
+  int reps = 0;
+
+  // Simple state machine:
+  // standing -> down -> standing = 1 rep
+  bool _isDown = false;
+
+  // Tunable thresholds (degrees)
+  // Knee angle: ~170 standing, ~70-100 squat depth
+  final double downThreshold;
+  final double upThreshold;
+
+  // Basic debouncing
+  DateTime _lastRepTime = DateTime.fromMillisecondsSinceEpoch(0);
+  final Duration repCooldown;
+
+  SquatLogic({
+    this.downThreshold = 110,
+    this.upThreshold = 160,
+    this.repCooldown = const Duration(milliseconds: 700),
+  });
+
+  void reset() {
+    reps = 0;
+    _isDown = false;
+    _lastRepTime = DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  /// Returns feedback string (optional)
+  String? update(Pose pose) {
+    // Use LEFT leg primarily; if missing use RIGHT
+    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
+    final leftKnee = pose.landmarks[PoseLandmarkType.leftKnee];
+    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
+
+    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+    final rightKnee = pose.landmarks[PoseLandmarkType.rightKnee];
+    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
+
+    double? kneeAngle;
+
+    if (leftHip != null && leftKnee != null && leftAnkle != null) {
+      kneeAngle = _angle(leftHip, leftKnee, leftAnkle);
+    } else if (rightHip != null && rightKnee != null && rightAnkle != null) {
+      kneeAngle = _angle(rightHip, rightKnee, rightAnkle);
+    } else {
+      return "Make sure your full leg is visible";
+    }
+
+    // Rep state machine
+    if (!_isDown && kneeAngle < downThreshold) {
+      _isDown = true;
+      return "Good! Now stand up";
+    }
+
+    if (_isDown && kneeAngle > upThreshold) {
+      final now = DateTime.now();
+      if (now.difference(_lastRepTime) >= repCooldown) {
+        reps += 1;
+        _lastRepTime = now;
+      }
+      _isDown = false;
+      return "Nice rep! Keep going";
+    }
+
+    // Form feedback (very light)
+    if (!_isDown && kneeAngle < 140) {
+      return "Go a bit lower";
+    }
+
+    if (_isDown && kneeAngle < 70) {
+      return "Don't go too low";
+    }
+
+    return null;
+  }
+
+  double _angle(PoseLandmark a, PoseLandmark b, PoseLandmark c) {
+    final abx = a.x - b.x;
+    final aby = a.y - b.y;
+    final cbx = c.x - b.x;
+    final cby = c.y - b.y;
+
+    final dot = abx * cbx + aby * cby;
+    final magAB = sqrt(abx * abx + aby * aby);
+    final magCB = sqrt(cbx * cbx + cby * cby);
+
+    if (magAB == 0 || magCB == 0) return 180;
+
+    final cosAngle = (dot / (magAB * magCB)).clamp(-1.0, 1.0);
+    final angleRad = acos(cosAngle);
+    return angleRad * (180 / pi);
+  }
+}
+
+========== exercise_session_screen.dart ==========
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../pose_detector/camera_pose_view.dart';
+
+class ExerciseSessionScreen extends StatefulWidget {
+  const ExerciseSessionScreen({super.key});
+
+  @override
+  State<ExerciseSessionScreen> createState() => _ExerciseSessionScreenState();
+}
+
+class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
+  static const Color kPrimary  = Color(0xFF1FC7B6);
+  static const Color kBg       = Color(0xFFF8FAFC);
+  static const Color kTextDark = Color(0xFF0F172A);
+  static const Color kSub      = Color(0xFF64748B);
+
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Route arguments â€” populated in didChangeDependencies
+  String _assignedExerciseId = '';
+  String _exerciseId         = '';
+  String _exerciseTitle      = 'Exercise';
+  int    _targetReps         = 10;
+
+  // Session state
+  bool _audioEnabled  = true;
+  bool _sessionSaving = false;
+  int  _currentRep    = 0;
+  final Stopwatch _stopwatch = Stopwatch();
+
+  ExerciseType _exercise = ExerciseType.bicepCurl;
+
+  bool _argumentsLoaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_argumentsLoaded) return;
+    _argumentsLoaded = true;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      _assignedExerciseId = args['assigned_exercise_id']?.toString() ?? '';
+      _exerciseId         = args['exercise_id']?.toString() ?? '';
+      _exerciseTitle      = args['title']?.toString() ?? 'Exercise';
+      _targetReps         = (args['reps'] as int?) ?? 10;
+
+      // Map title to ExerciseType for the pose engine
+      _exercise = _titleToExerciseType(_exerciseTitle);
+    }
+
+    _stopwatch.start();
+  }
+
+  @override
+  void dispose() {
+    _stopwatch.stop();
+    super.dispose();
+  }
+
+  ExerciseType _titleToExerciseType(String title) {
+    final t = title.toLowerCase();
+    if (t.contains('bicep') || t.contains('curl')) return ExerciseType.bicepCurl;
+    if (t.contains('side') || t.contains('raise')) return ExerciseType.sideRaise;
+    if (t.contains('squat'))                        return ExerciseType.squats;
+    return ExerciseType.bicepCurl;
+  }
+
+  String _exerciseTypeTitle(ExerciseType ex) {
+    switch (ex) {
+      case ExerciseType.bicepCurl: return 'Bicep Curl';
+      case ExerciseType.sideRaise: return 'Side Raise';
+      case ExerciseType.squats:    return 'Squats';
+    }
+  }
+
+  // Called by pose engine when a rep is completed
+  void _onRepCompleted(int repCount) {
+    setState(() => _currentRep = repCount);
+
+    // Auto-finish when target reps reached
+    if (repCount >= _targetReps) {
+      _finishSession();
+    }
+  }
+
+  Future<void> _finishSession() async {
+    if (_sessionSaving) return;
+    setState(() => _sessionSaving = true);
+
+    _stopwatch.stop();
+    final durationSeconds = _stopwatch.elapsed.inSeconds;
+
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw Exception('Not logged in');
+
+      // Fetch therapist_id from assigned_exercises for this record
+      String? therapistId;
+      if (_assignedExerciseId.isNotEmpty) {
+        final assigned = await _supabase
+            .from('assigned_exercises')
+            .select('therapist_id')
+            .eq('id', _assignedExerciseId)
+            .maybeSingle();
+        therapistId = assigned?['therapist_id']?.toString();
+      }
+
+      // Save session report
+      await _supabase.from('session_reports').insert({
+        'patient_id':       user.id,
+        'therapist_id':     therapistId,
+        'exercise_id':      _exerciseId.isNotEmpty ? _exerciseId : null,
+        'exercise_title':   _exerciseTitle,
+        'reps_done':        _currentRep,
+        'duration_seconds': durationSeconds,
+        'accuracy':         0.0,
+        'notes':            null,
+        'created_at':       DateTime.now().toIso8601String(),
+      });
+
+      if (!mounted) return;
+
+      // Show completion dialog
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _SessionCompleteDialog(
+          exerciseTitle:   _exerciseTitle,
+          reps:            _currentRep,
+          durationSeconds: durationSeconds,
+          onDone: () {
+            Navigator.of(context).pop(); // close dialog
+            Navigator.of(context).pop(); // go back to exercises
+          },
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save session: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sessionSaving = false);
+    }
+  }
+
+  Future<void> _stopSession() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Stop Session?',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+        content: Text(
+            'You have completed $_currentRep of $_targetReps reps.\nSave progress and exit?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Stop & Save',
+                style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _finishSession();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w      = MediaQuery.of(context).size.width;
+    final isWide = w >= 900;
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _stopSession,
+        ),
+        centerTitle: true,
+        title: Column(
+          children: [
+            Text(
+              _exerciseTitle,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800, fontSize: 16),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Rep $_currentRep of $_targetReps',
+              style: const TextStyle(fontSize: 12, color: kSub),
+            ),
+          ],
+        ),
+        actions: [
+          if (_sessionSaving)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'Audio',
+              onPressed: () =>
+                  setState(() => _audioEnabled = !_audioEnabled),
+              icon: Icon(_audioEnabled
+                  ? Icons.volume_up_outlined
+                  : Icons.volume_off_outlined),
+            ),
+          const SizedBox(width: 8),
+        ],
+      ),
+
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: isWide ? _wideLayout() : _mobileBlocked(),
+          ),
+        ),
+      ),
+
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.black12)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _CircleButton(
+              bg: Colors.red,
+              icon: Icons.stop,
+              onTap: _stopSession,
+            ),
+            const SizedBox(width: 16),
+            _CircleButton(
+              bg: Colors.white,
+              icon: Icons.check_circle_outline,
+              iconColor: kPrimary,
+              border: true,
+              onTap: _finishSession,
+            ),
+            const SizedBox(width: 16),
+            _CircleButton(
+              bg: Colors.white,
+              icon: Icons.chat_bubble_outline,
+              iconColor: kTextDark,
+              border: true,
+              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Chat with therapist â€” coming soon')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wideLayout() {
+    return Row(
+      children: [
+        Expanded(child: _cameraPanel()),
+        const SizedBox(width: 16),
+        Expanded(child: _referencePanel()),
+      ],
+    );
+  }
+
+  Widget _mobileBlocked() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.desktop_windows, size: 44, color: kSub),
+          SizedBox(height: 14),
+          Text('Web Mode Only',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: kTextDark)),
+          SizedBox(height: 8),
+          Text(
+            'This exercise session layout is designed for Web/Tablet.\n\nOpen PhysioCare on a wider screen to continue.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: kSub),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cameraPanel() {
+    return _PanelCard(
+      label: 'Your Camera',
+      topRightWidget: DropdownButtonHideUnderline(
+        child: DropdownButton<ExerciseType>(
+          value: _exercise,
+          dropdownColor: Colors.white,
+          style: const TextStyle(
+              color: kTextDark, fontWeight: FontWeight.w700),
+          items: const [
+            DropdownMenuItem(
+                value: ExerciseType.bicepCurl,
+                child: Text('Bicep Curl')),
+            DropdownMenuItem(
+                value: ExerciseType.sideRaise,
+                child: Text('Side Raise')),
+            DropdownMenuItem(
+                value: ExerciseType.squats,
+                child: Text('Squats')),
+          ],
+          onChanged: (val) {
+            if (val == null) return;
+            setState(() {
+              _exercise    = val;
+              _currentRep  = 0;
+              _stopwatch
+                ..reset()
+                ..start();
+            });
+          },
+        ),
+      ),
+      child: CameraPoseView(
+        showOverlayUI: false,
+        initialExercise: _exercise,
+      ),
+    );
+  }
+
+  Widget _referencePanel() {
+    return _PanelCard(
+      label: 'Reference & Progress',
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            // Progress ring area
+            const SizedBox(height: 16),
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  height: 140,
+                  width: 140,
+                  child: CircularProgressIndicator(
+                    value: _targetReps > 0
+                        ? (_currentRep / _targetReps).clamp(0.0, 1.0)
+                        : 0,
+                    strokeWidth: 10,
+                    backgroundColor: Colors.black12,
+                    valueColor:
+                        const AlwaysStoppedAnimation(kPrimary),
+                  ),
+                ),
+                Column(
+                  children: [
+                    Text(
+                      '$_currentRep',
+                      style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w900,
+                          color: kTextDark),
+                    ),
+                    Text(
+                      'of $_targetReps',
+                      style: const TextStyle(
+                          fontSize: 13, color: kSub),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _currentRep >= _targetReps
+                  ? 'ðŸŽ‰ Target reached!'
+                  : '${_targetReps - _currentRep} reps remaining',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: _currentRep >= _targetReps
+                    ? kPrimary
+                    : kTextDark,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Play reference video placeholder
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    height: 72,
+                    width: 72,
+                    decoration: const BoxDecoration(
+                        color: kPrimary, shape: BoxShape.circle),
+                    child: const Icon(Icons.play_arrow,
+                        size: 38, color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Reference Video',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: kTextDark)),
+                  const SizedBox(height: 4),
+                  const Text('Follow this movement',
+                      style: TextStyle(color: kSub, fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Session complete dialog
+// ---------------------------------------------------------------------------
+
+class _SessionCompleteDialog extends StatelessWidget {
+  final String exerciseTitle;
+  final int reps;
+  final int durationSeconds;
+  final VoidCallback onDone;
+
+  const _SessionCompleteDialog({
+    required this.exerciseTitle,
+    required this.reps,
+    required this.durationSeconds,
+    required this.onDone,
+  });
+
+  String get _duration {
+    final m = durationSeconds ~/ 60;
+    final s = durationSeconds % 60;
+    if (m == 0) return '${s}s';
+    return '${m}m ${s}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 70,
+            width: 70,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1FC7B6).withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_circle,
+                color: Color(0xFF1FC7B6), size: 40),
+          ),
+          const SizedBox(height: 16),
+          const Text('Session Complete! ðŸŽ‰',
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(exerciseTitle,
+              style: const TextStyle(color: Color(0xFF64748B))),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _StatChip(label: 'Reps', value: '$reps'),
+              _StatChip(label: 'Time', value: _duration),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1FC7B6),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: onDone,
+              child: const Text('Done',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value,
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF0F172A))),
+        const SizedBox(height: 4),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 12, color: Color(0xFF64748B))),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared panel card widget
+// ---------------------------------------------------------------------------
+
+class _PanelCard extends StatelessWidget {
+  final String  label;
+  final Widget  child;
+  final Widget? topRightWidget;
+
+  const _PanelCard({
+    required this.label,
+    required this.child,
+    this.topRightWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF64748B),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700)),
+              ),
+              const Spacer(),
+              if (topRightWidget != null) topRightWidget!,
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Circle button widget
+// ---------------------------------------------------------------------------
+
+class _CircleButton extends StatelessWidget {
+  final Color    bg;
+  final IconData icon;
+  final Color    iconColor;
+  final bool     border;
+  final VoidCallback onTap;
+
+  const _CircleButton({
+    required this.bg,
+    required this.icon,
+    this.iconColor = Colors.white,
+    this.border    = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: bg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Container(
+          height: 62,
+          width:  62,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: border ? Border.all(color: Colors.black12) : null,
+          ),
+          child: Icon(icon, color: iconColor, size: 28),
+        ),
+      ),
+    );
+  }
+}
+
+========== pose_session_controller.dart ==========
+
