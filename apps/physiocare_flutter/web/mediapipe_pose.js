@@ -38,7 +38,7 @@ window.startMediapipePose = async function (videoId) {
   await videoElement.play();
 
   pose = new Pose({
-    locateFile: (file) => `mediapipe/pose/${file}`,
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
   });
 
   pose.setOptions({

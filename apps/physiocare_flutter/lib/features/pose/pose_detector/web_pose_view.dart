@@ -34,17 +34,17 @@ class WebPoseView extends StatefulWidget {
 class _WebPoseViewState extends State<WebPoseView> {
   late ExerciseType _selectedExercise;
 
-  final WebBicepCurlLogic  _bicepCounter   = WebBicepCurlLogic();
-  final WebSideRaiseLogic  _sideRaiseLogic = WebSideRaiseLogic();
-  final WebSquatLogic      _squatLogic     = WebSquatLogic();
+  final WebBicepCurlLogic _bicepCounter = WebBicepCurlLogic();
+  final WebSideRaiseLogic _sideRaiseLogic = WebSideRaiseLogic();
+  final WebSquatLogic _squatLogic = WebSquatLogic();
 
   UnifiedPose? _lastPose;
   String _feedback = 'Waiting for pose...';
 
-  double _liveAccuracy         = 0;
-  double _sessionAccuracySum   = 0;
-  int    _sessionAccuracyCount = 0;
-  int    _prevTotalReps        = 0;
+  double _liveAccuracy = 0;
+  double _sessionAccuracySum = 0;
+  int _sessionAccuracyCount = 0;
+  int _prevTotalReps = 0;
 
   DateTime _lastFeedbackTime = DateTime.fromMillisecondsSinceEpoch(0);
   final Duration _feedbackCooldown = const Duration(milliseconds: 350);
@@ -61,12 +61,14 @@ class _WebPoseViewState extends State<WebPoseView> {
 
       final list = landmarks
           .map((e) => Map<String, dynamic>.from(e as Map))
-          .map((m) => UnifiedLandmark(
-                x:          (m['x']          ?? 0).toDouble(),
-                y:          (m['y']          ?? 0).toDouble(),
-                z:          (m['z']          ?? 0).toDouble(),
-                visibility: (m['visibility'] ?? 1).toDouble(),
-              ))
+          .map(
+            (m) => UnifiedLandmark(
+              x: (m['x'] ?? 0).toDouble(),
+              y: (m['y'] ?? 0).toDouble(),
+              z: (m['z'] ?? 0).toDouble(),
+              visibility: (m['visibility'] ?? 1).toDouble(),
+            ),
+          )
           .toList();
 
       final pose = UnifiedPose(list);
@@ -117,9 +119,12 @@ class _WebPoseViewState extends State<WebPoseView> {
 
   int _currentReps() {
     switch (_selectedExercise) {
-      case ExerciseType.bicepCurl: return _bicepCounter.reps;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.reps;
-      case ExerciseType.squats:    return _squatLogic.reps;
+      case ExerciseType.bicepCurl:
+        return _bicepCounter.reps;
+      case ExerciseType.sideRaise:
+        return _sideRaiseLogic.reps;
+      case ExerciseType.squats:
+        return _squatLogic.reps;
     }
   }
 
@@ -149,30 +154,36 @@ class _WebPoseViewState extends State<WebPoseView> {
       final w = UnifiedPoseUtils.lm(pose, 15);
       if (!UnifiedPoseUtils.visible(s) ||
           !UnifiedPoseUtils.visible(e) ||
-          !UnifiedPoseUtils.visible(w)) { return 0; }
-      final angle  = UnifiedPoseUtils.angleFrom3(s!, e!, w!);
+          !UnifiedPoseUtils.visible(w)) {
+        return 0;
+      }
+      final angle = UnifiedPoseUtils.angleFrom3(s!, e!, w!);
       final target = (_bicepCounter.reps % 2 == 0) ? 45.0 : 165.0;
       return (100 - (angle - target).abs() * 1.2).clamp(0, 100);
     }
     if (_selectedExercise == ExerciseType.sideRaise) {
       final hip = UnifiedPoseUtils.lm(pose, 23);
-      final sh  = UnifiedPoseUtils.lm(pose, 11);
-      final el  = UnifiedPoseUtils.lm(pose, 13);
+      final sh = UnifiedPoseUtils.lm(pose, 11);
+      final el = UnifiedPoseUtils.lm(pose, 13);
       if (!UnifiedPoseUtils.visible(hip) ||
           !UnifiedPoseUtils.visible(sh) ||
-          !UnifiedPoseUtils.visible(el)) { return 0; }
-      final angle  = UnifiedPoseUtils.angleFrom3(hip!, sh!, el!);
+          !UnifiedPoseUtils.visible(el)) {
+        return 0;
+      }
+      final angle = UnifiedPoseUtils.angleFrom3(hip!, sh!, el!);
       final target = (_sideRaiseLogic.reps % 2 == 0) ? 90.0 : 15.0;
       return (100 - (angle - target).abs()).clamp(0, 100);
     }
     if (_selectedExercise == ExerciseType.squats) {
-      final hip   = UnifiedPoseUtils.lm(pose, 23);
-      final knee  = UnifiedPoseUtils.lm(pose, 25);
+      final hip = UnifiedPoseUtils.lm(pose, 23);
+      final knee = UnifiedPoseUtils.lm(pose, 25);
       final ankle = UnifiedPoseUtils.lm(pose, 27);
       if (!UnifiedPoseUtils.visible(hip) ||
           !UnifiedPoseUtils.visible(knee) ||
-          !UnifiedPoseUtils.visible(ankle)) { return 0; }
-      final angle  = UnifiedPoseUtils.angleFrom3(hip!, knee!, ankle!);
+          !UnifiedPoseUtils.visible(ankle)) {
+        return 0;
+      }
+      final angle = UnifiedPoseUtils.angleFrom3(hip!, knee!, ankle!);
       final target = (_squatLogic.reps % 2 == 0) ? 95.0 : 170.0;
       return (100 - (angle - target).abs() * 0.9).clamp(0, 100);
     }
@@ -181,8 +192,8 @@ class _WebPoseViewState extends State<WebPoseView> {
 
   void _updateAccuracy(UnifiedPose pose) {
     final live = _computeLiveAccuracy(pose);
-    _liveAccuracy        = (_liveAccuracy * 0.85) + (live * 0.15);
-    _sessionAccuracySum  += live;
+    _liveAccuracy = (_liveAccuracy * 0.85) + (live * 0.15);
+    _sessionAccuracySum += live;
     _sessionAccuracyCount += 1;
 
     // Fire accuracy callback every ~10 frames
@@ -191,106 +202,62 @@ class _WebPoseViewState extends State<WebPoseView> {
     }
   }
 
-  double get _sessionAccuracyAvg =>
-      _sessionAccuracyCount == 0 ? 0 : _sessionAccuracySum / _sessionAccuracyCount;
-
-  String _exerciseName() {
-    switch (_selectedExercise) {
-      case ExerciseType.bicepCurl: return 'Bicep Curl';
-      case ExerciseType.sideRaise: return 'Side Raise';
-      case ExerciseType.squats:    return 'Squats';
-    }
-  }
+  double get _sessionAccuracyAvg => _sessionAccuracyCount == 0
+      ? 0
+      : _sessionAccuracySum / _sessionAccuracyCount;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
-      appBar: AppBar(
-        title: Text('Pose (Web) — ${_exerciseName()}'),
-      ),
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            Expanded(
-              child: DropdownButton<ExerciseType>(
-                value: _selectedExercise,
-                items: const [
-                  DropdownMenuItem(
-                      value: ExerciseType.bicepCurl,
-                      child: Text('Bicep Curl')),
-                  DropdownMenuItem(
-                      value: ExerciseType.sideRaise,
-                      child: Text('Side Raise')),
-                  DropdownMenuItem(
-                      value: ExerciseType.squats,
-                      child: Text('Squats')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _selectedExercise = v);
-                  _reset();
-                },
+    return Container(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const WebCameraPreview(viewId: 'mp-video'),
+
+          if (_lastPose != null)
+            CustomPaint(
+              painter: UnifiedPosePainter(
+                pose: _lastPose!,
+                sourceSize: const Size(640, 480),
+                isNormalized: true,
               ),
             ),
-          ]),
-        ),
-        Expanded(
-          child: Center(
-            child: AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Container(
-                color: Colors.black,
-                child: Stack(fit: StackFit.expand, children: [
-                  const WebCameraPreview(viewId: 'mp-video'),
 
-                  if (_lastPose != null)
-                    CustomPaint(
-                      painter: UnifiedPosePainter(
-                        pose:         _lastPose!,
-                        sourceSize:   const Size(640, 480),
-                        isNormalized: true,
-                      ),
-                    ),
-
-                  Positioned(
-                    top: 12, right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: Text(
-                        'Reps: ${_currentReps()}\n'
-                        'Acc: ${_liveAccuracy.toStringAsFixed(0)}%',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                  ),
-
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      color: Colors.black54,
-                      child: Text(
-                        '$_feedback   |   Avg: ${_sessionAccuracyAvg.toStringAsFixed(0)}%',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ]),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Text(
+                'Reps: ${_currentReps()}\n'
+                'Acc: ${_liveAccuracy.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
-        ),
-      ]),
+
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.black54,
+              child: Text(
+                '$_feedback   |   Avg: ${_sessionAccuracyAvg.toStringAsFixed(0)}%',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

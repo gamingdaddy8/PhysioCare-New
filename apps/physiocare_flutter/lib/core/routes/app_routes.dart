@@ -6,12 +6,14 @@ import '../../features/auth/screens/register_screen.dart';
 
 import '../../features/patient/home/patient_portal_home_screen.dart';
 import '../../features/patient/exercises/my_exercises_screen.dart';
-import '../../features/patient/reports/session_reports_screen.dart';
 
 import '../../features/pose/pose_detector/camera_pose_screen.dart';
 import '../../features/pose/session/exercise_session_screen.dart';
 
 import '../../features/therapist/home/therapist_home_screen.dart';
+
+// Report feature — new PatientReportScreen replaces the old SessionReportsScreen
+import '../../features/reports/screens/patient_report_screen.dart';
 
 class AppRoutes {
   static const splash = "/";
@@ -31,6 +33,9 @@ class AppRoutes {
   static const poseTest = "/pose-test";
   static const exerciseSession = "/exercise-session";
 
+  // Note: TherapistReportScreen is opened via Navigator.push (not a named route)
+  // because it requires patientId + patientName arguments passed at call-site.
+
   static Map<String, WidgetBuilder> routes = {
     // First screen
     splash: (context) => const LandingScreen(),
@@ -42,7 +47,7 @@ class AppRoutes {
     // Patient Portal
     patientHome: (context) => const PatientPortalHomeScreen(),
     patientExercises: (context) => const MyExercisesScreen(),
-    patientReports: (context) => const SessionReportsScreen(),
+    patientReports: (context) => const PatientReportScreen(),
 
     // Schedule placeholder (for now)
     patientSchedule: (context) => const Scaffold(
@@ -52,7 +57,7 @@ class AppRoutes {
     // Therapist Portal
     therapistHome: (context) => const TherapistHomeScreen(),
 
-    // Pose screen (this internally decides Web vs Mobile later)
+    // Pose screen (decides Web vs Mobile internally)
     poseTest: (context) => const CameraPoseScreen(),
 
     // Exercise session UI

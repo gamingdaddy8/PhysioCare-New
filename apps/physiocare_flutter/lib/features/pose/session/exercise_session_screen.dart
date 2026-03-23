@@ -15,24 +15,24 @@ class ExerciseSessionScreen extends StatefulWidget {
 }
 
 class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
-  static const Color kPrimary  = Color(0xFF1FC7B6);
-  static const Color kBg       = Color(0xFFF8FAFC);
+  static const Color kPrimary = Color(0xFF1FC7B6);
+  static const Color kBg = Color(0xFFF8FAFC);
   static const Color kTextDark = Color(0xFF0F172A);
-  static const Color kSub      = Color(0xFF64748B);
+  static const Color kSub = Color(0xFF64748B);
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // Route arguments — populated in didChangeDependencies
   String _assignedExerciseId = '';
-  String _exerciseId         = '';
-  String _exerciseTitle      = 'Exercise';
-  int    _targetReps         = 10;
+  String _exerciseId = '';
+  String _exerciseTitle = 'Exercise';
+  int _targetReps = 10;
 
   // Session state
-  bool _audioEnabled  = true;
+  bool _audioEnabled = true;
   bool _sessionSaving = false;
-  int    _currentRep    = 0;
-  double _liveAccuracy  = 0.0;
+  int _currentRep = 0;
+  double _liveAccuracy = 0.0;
   final Stopwatch _stopwatch = Stopwatch();
 
   ExerciseType _exercise = ExerciseType.bicepCurl;
@@ -48,9 +48,9 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
       _assignedExerciseId = args['assigned_exercise_id']?.toString() ?? '';
-      _exerciseId         = args['exercise_id']?.toString() ?? '';
-      _exerciseTitle      = args['title']?.toString() ?? 'Exercise';
-      _targetReps         = (args['reps'] as int?) ?? 10;
+      _exerciseId = args['exercise_id']?.toString() ?? '';
+      _exerciseTitle = args['title']?.toString() ?? 'Exercise';
+      _targetReps = (args['reps'] as int?) ?? 10;
 
       // Map title to ExerciseType for the pose engine
       _exercise = _titleToExerciseType(_exerciseTitle);
@@ -67,17 +67,22 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
   ExerciseType _titleToExerciseType(String title) {
     final t = title.toLowerCase();
-    if (t.contains('bicep') || t.contains('curl')) return ExerciseType.bicepCurl;
-    if (t.contains('side') || t.contains('raise')) return ExerciseType.sideRaise;
-    if (t.contains('squat'))                        return ExerciseType.squats;
+    if (t.contains('bicep') || t.contains('curl'))
+      return ExerciseType.bicepCurl;
+    if (t.contains('side') || t.contains('raise'))
+      return ExerciseType.sideRaise;
+    if (t.contains('squat')) return ExerciseType.squats;
     return ExerciseType.bicepCurl;
   }
 
   String _exerciseTypeTitle(ExerciseType ex) {
     switch (ex) {
-      case ExerciseType.bicepCurl: return 'Bicep Curl';
-      case ExerciseType.sideRaise: return 'Side Raise';
-      case ExerciseType.squats:    return 'Squats';
+      case ExerciseType.bicepCurl:
+        return 'Bicep Curl';
+      case ExerciseType.sideRaise:
+        return 'Side Raise';
+      case ExerciseType.squats:
+        return 'Squats';
     }
   }
 
@@ -120,15 +125,15 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
       // Save session report
       await _supabase.from('session_reports').insert({
-        'patient_id':       user.id,
-        'therapist_id':     therapistId,
-        'exercise_id':      _exerciseId.isNotEmpty ? _exerciseId : null,
-        'exercise_title':   _exerciseTitle,
-        'reps_done':        _currentRep,
+        'patient_id': user.id,
+        'therapist_id': therapistId,
+        'exercise_id': _exerciseId.isNotEmpty ? _exerciseId : null,
+        'exercise_title': _exerciseTitle,
+        'reps_done': _currentRep,
         'duration_seconds': durationSeconds,
-        'accuracy':         _liveAccuracy,
-        'notes':            null,
-        'created_at':       DateTime.now().toIso8601String(),
+        'accuracy': _liveAccuracy,
+        'notes': null,
+        'created_at': DateTime.now().toIso8601String(),
       });
 
       if (!mounted) return;
@@ -138,8 +143,8 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) => _SessionCompleteDialog(
-          exerciseTitle:   _exerciseTitle,
-          reps:            _currentRep,
+          exerciseTitle: _exerciseTitle,
+          reps: _currentRep,
           durationSeconds: durationSeconds,
           onDone: () {
             Navigator.of(context).pop(); // close dialog
@@ -149,9 +154,9 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save session: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save session: $e')));
     } finally {
       if (mounted) setState(() => _sessionSaving = false);
     }
@@ -161,10 +166,13 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Stop Session?',
-            style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text(
+          'Stop Session?',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
         content: Text(
-            'You have completed $_currentRep of $_targetReps reps.\nSave progress and exit?'),
+          'You have completed $_currentRep of $_targetReps reps.\nSave progress and exit?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -176,8 +184,10 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Stop & Save',
-                style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text(
+              'Stop & Save',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
           ),
         ],
       ),
@@ -190,7 +200,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final w      = MediaQuery.of(context).size.width;
+    final w = MediaQuery.of(context).size.width;
     final isWide = w >= 900;
 
     return Scaffold(
@@ -208,8 +218,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
           children: [
             Text(
               _exerciseTitle,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w800, fontSize: 16),
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
             ),
             const SizedBox(height: 2),
             Text(
@@ -231,11 +240,12 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
           else
             IconButton(
               tooltip: 'Audio',
-              onPressed: () =>
-                  setState(() => _audioEnabled = !_audioEnabled),
-              icon: Icon(_audioEnabled
-                  ? Icons.volume_up_outlined
-                  : Icons.volume_off_outlined),
+              onPressed: () => setState(() => _audioEnabled = !_audioEnabled),
+              icon: Icon(
+                _audioEnabled
+                    ? Icons.volume_up_outlined
+                    : Icons.volume_off_outlined,
+              ),
             ),
           const SizedBox(width: 8),
         ],
@@ -281,7 +291,9 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
               iconColor: kTextDark,
               border: true,
               onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chat with therapist — coming soon')),
+                const SnackBar(
+                  content: Text('Chat with therapist — coming soon'),
+                ),
               ),
             ),
           ],
@@ -314,11 +326,14 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
         children: [
           Icon(Icons.desktop_windows, size: 44, color: kSub),
           SizedBox(height: 14),
-          Text('Web Mode Only',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: kTextDark)),
+          Text(
+            'Web Mode Only',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: kTextDark,
+            ),
+          ),
           SizedBox(height: 8),
           Text(
             'This exercise session layout is designed for Web/Tablet.\n\nOpen PhysioCare on a wider screen to continue.',
@@ -337,24 +352,23 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
         child: DropdownButton<ExerciseType>(
           value: _exercise,
           dropdownColor: Colors.white,
-          style: const TextStyle(
-              color: kTextDark, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: kTextDark, fontWeight: FontWeight.w700),
           items: const [
             DropdownMenuItem(
-                value: ExerciseType.bicepCurl,
-                child: Text('Bicep Curl')),
+              value: ExerciseType.bicepCurl,
+              child: Text('Bicep Curl'),
+            ),
             DropdownMenuItem(
-                value: ExerciseType.sideRaise,
-                child: Text('Side Raise')),
-            DropdownMenuItem(
-                value: ExerciseType.squats,
-                child: Text('Squats')),
+              value: ExerciseType.sideRaise,
+              child: Text('Side Raise'),
+            ),
+            DropdownMenuItem(value: ExerciseType.squats, child: Text('Squats')),
           ],
           onChanged: (val) {
             if (val == null) return;
             setState(() {
-              _exercise    = val;
-              _currentRep  = 0;
+              _exercise = val;
+              _currentRep = 0;
               _stopwatch
                 ..reset()
                 ..start();
@@ -364,14 +378,14 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
       ),
       child: kIsWeb
           ? WebPoseView(
-              initialExercise:    _exercise,
-              onRepCompleted:     _onRepCompleted,
-              onAccuracyUpdated:  _onAccuracyUpdated,
+              initialExercise: _exercise,
+              onRepCompleted: _onRepCompleted,
+              onAccuracyUpdated: _onAccuracyUpdated,
             )
           : CameraPoseView(
-              showOverlayUI:     false,
-              initialExercise:   _exercise,
-              onRepCompleted:    _onRepCompleted,
+              showOverlayUI: false,
+              initialExercise: _exercise,
+              onRepCompleted: _onRepCompleted,
               onAccuracyUpdated: _onAccuracyUpdated,
             ),
     );
@@ -399,8 +413,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
                         : 0,
                     strokeWidth: 10,
                     backgroundColor: Colors.black12,
-                    valueColor:
-                        const AlwaysStoppedAnimation(kPrimary),
+                    valueColor: const AlwaysStoppedAnimation(kPrimary),
                   ),
                 ),
                 Column(
@@ -408,14 +421,14 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
                     Text(
                       '$_currentRep',
                       style: const TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                          color: kTextDark),
+                        fontSize: 36,
+                        fontWeight: FontWeight.w900,
+                        color: kTextDark,
+                      ),
                     ),
                     Text(
-                      'of \$_targetReps',
-                      style: const TextStyle(
-                          fontSize: 13, color: kSub),
+                      'of $_targetReps',
+                      style: const TextStyle(fontSize: 13, color: kSub),
                     ),
                   ],
                 ),
@@ -425,18 +438,18 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
             // Accuracy chip
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: kPrimary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'Accuracy: \${_liveAccuracy.toStringAsFixed(0)}%',
+                'Accuracy: ${_liveAccuracy.toStringAsFixed(0)}%',
                 style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: kPrimary,
-                    fontSize: 13),
+                  fontWeight: FontWeight.w800,
+                  color: kPrimary,
+                  fontSize: 13,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -444,12 +457,10 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
             Text(
               _currentRep >= _targetReps
                   ? '🎉 Target reached!'
-                  : '\${_targetReps - _currentRep} reps remaining',
+                  : '${_targetReps - _currentRep} reps remaining',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: _currentRep >= _targetReps
-                    ? kPrimary
-                    : kTextDark,
+                color: _currentRep >= _targetReps ? kPrimary : kTextDark,
               ),
             ),
             const SizedBox(height: 24),
@@ -457,9 +468,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
             // ── Reference video player ────────────────────────
             SizedBox(
               height: 300,
-              child: ExerciseReferencePlayer(
-                exercise: _exercise,
-              ),
+              child: ExerciseReferencePlayer(exercise: _exercise),
             ),
           ],
         ),
@@ -506,16 +515,19 @@ class _SessionCompleteDialog extends StatelessWidget {
               color: const Color(0xFF1FC7B6).withOpacity(0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle,
-                color: Color(0xFF1FC7B6), size: 40),
+            child: const Icon(
+              Icons.check_circle,
+              color: Color(0xFF1FC7B6),
+              size: 40,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text('Session Complete! 🎉',
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w900)),
+          const Text(
+            'Session Complete! 🎉',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 6),
-          Text(exerciseTitle,
-              style: const TextStyle(color: Color(0xFF64748B))),
+          Text(exerciseTitle, style: const TextStyle(color: Color(0xFF64748B))),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -532,12 +544,15 @@ class _SessionCompleteDialog extends StatelessWidget {
                 backgroundColor: const Color(0xFF1FC7B6),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               onPressed: onDone,
-              child: const Text('Done',
-                  style: TextStyle(fontWeight: FontWeight.w900)),
+              child: const Text(
+                'Done',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ),
         ],
@@ -555,15 +570,19 @@ class _StatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value,
-            style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF0F172A))),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF0F172A),
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 12, color: Color(0xFF64748B))),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+        ),
       ],
     );
   }
@@ -574,8 +593,8 @@ class _StatChip extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PanelCard extends StatelessWidget {
-  final String  label;
-  final Widget  child;
+  final String label;
+  final Widget child;
   final Widget? topRightWidget;
 
   const _PanelCard({
@@ -599,15 +618,20 @@ class _PanelCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 7),
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF64748B),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(label,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
               const Spacer(),
               if (topRightWidget != null) topRightWidget!,
@@ -631,17 +655,17 @@ class _PanelCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _CircleButton extends StatelessWidget {
-  final Color    bg;
+  final Color bg;
   final IconData icon;
-  final Color    iconColor;
-  final bool     border;
+  final Color iconColor;
+  final bool border;
   final VoidCallback onTap;
 
   const _CircleButton({
     required this.bg,
     required this.icon,
     this.iconColor = Colors.white,
-    this.border    = false,
+    this.border = false,
     required this.onTap,
   });
 
@@ -655,7 +679,7 @@ class _CircleButton extends StatelessWidget {
         onTap: onTap,
         child: Container(
           height: 62,
-          width:  62,
+          width: 62,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: border ? Border.all(color: Colors.black12) : null,
