@@ -1,5 +1,6 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:ui_web' as ui;
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'exercise_type.dart';
@@ -28,21 +29,22 @@ class _ExerciseReferencePlayerState
   bool _showVideo = false;
 
   // YouTube video IDs for each exercise
+  // Source: Bob & Brad / Physical Therapy Channel — no weights, rehab focused
   static const Map<ExerciseType, _VideoInfo> _videos = {
     ExerciseType.bicepCurl: _VideoInfo(
-      videoId:     'ykJmrZ5v0Oo',
-      title:       'Bicep Curl',
-      description: 'Proper form — stand straight, curl arms up fully, lower slowly',
+      videoId:     'av7-8igSXTs',
+      title:       'Bicep Curl (No Weights)',
+      description: 'Rehab curl — use resistance band or bodyweight, keep elbows tucked, lower slowly',
     ),
     ExerciseType.sideRaise: _VideoInfo(
-      videoId:     '3VcKaXpzqRo',
-      title:       'Side Raise',
-      description: 'Raise arms sideways to shoulder height, keep elbows slightly bent',
+      videoId:     'XNwMpAjTqaI',
+      title:       'Side Raise (No Weights)',
+      description: 'Raise arms sideways to shoulder height, no weights needed, slow controlled motion',
     ),
     ExerciseType.squats: _VideoInfo(
-      videoId:     'aclHkVaku9U',
-      title:       'Bodyweight Squat',
-      description: 'Feet shoulder-width, lower hips until thighs parallel to floor',
+      videoId:     'YaXPRqUwItQ',
+      title:       'Bodyweight Squat (Rehab)',
+      description: 'Physiotherapy squat — feet shoulder-width, lower slowly, keep knees over toes',
     ),
   };
 
@@ -60,15 +62,18 @@ class _ExerciseReferencePlayerState
 
     ui.platformViewRegistry.registerViewFactory(
       _viewId,
-      (int id) => html.IFrameElement()
-        ..src = src
-        ..style.border = 'none'
-        ..style.width  = '100%'
-        ..style.height = '100%'
-        ..allowFullscreen = true
-        ..setAttribute('allow',
-            'accelerometer; autoplay; clipboard-write; '
-            'encrypted-media; gyroscope; picture-in-picture'),
+      (int id) {
+          final el = web.HTMLIFrameElement();
+          el.src = src;
+          el.style.border = 'none';
+          el.style.width = '100%';
+          el.style.height = '100%';
+          el.allowFullscreen = true;
+          el.setAttribute('allow',
+              'accelerometer; autoplay; clipboard-write; '
+              'encrypted-media; gyroscope; picture-in-picture');
+          return el;
+        },
     );
   }
 

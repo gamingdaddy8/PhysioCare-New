@@ -88,7 +88,7 @@ class ProfileService {
   Future<List<Map<String, dynamic>>> fetchAllTherapists() async {
     final rows = await _supabase
         .from('profiles')
-        .select('id, full_name, specialization')
+        .select('id, full_name, specialization, clinic_address, experience_years')
         .eq('role', 'therapist')
         .order('full_name', ascending: true);
 

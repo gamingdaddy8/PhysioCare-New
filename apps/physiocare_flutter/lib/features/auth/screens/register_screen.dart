@@ -33,6 +33,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // Therapist
   final _therapistPhone = TextEditingController();
+  final _clinicAddress = TextEditingController();
+  final _experienceYears = TextEditingController();
 
   // Therapist selection (for patient registration)
   List<Map<String, dynamic>> _therapists = [];
@@ -54,18 +56,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final rows = await supabase
           .from("profiles")
-          .select("id, full_name")
+          .select("id, full_name, clinic_address, experience_years")
           .eq("role", "therapist")
           .order("full_name", ascending: true);
 
       _therapists = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-
-      // Auto-select first therapist if available (optional)
-      if (_therapists.isNotEmpty && _selectedTherapistId == null) {
-        _selectedTherapistId = _therapists.first["id"]?.toString();
-      }
     } catch (e) {
       // Don't block registration UI, just show a toast
       if (mounted) _toast("Failed to load therapists");
@@ -83,6 +80,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _familyPhone.dispose();
     _address.dispose();
     _therapistPhone.dispose();
+    _clinicAddress.dispose();
+    _experienceYears.dispose();
     super.dispose();
   }
 
@@ -137,6 +136,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _toast("Enter therapist phone number");
         return;
       }
+      if (_clinicAddress.text.trim().isEmpty) {
+        _toast("Enter clinic address");
+        return;
+      }
+      if (_experienceYears.text.trim().isEmpty) {
+        _toast("Enter years of experience");
+        return;
+      }
     }
 
     setState(() => _loading = true);
@@ -160,6 +167,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           "address": _role == RegisterRole.patient ? _address.text.trim() : null,
           "assigned_therapist_id":
               _role == RegisterRole.patient ? _selectedTherapistId : null,
+          "clinic_address":
+              _role == RegisterRole.therapist ? _clinicAddress.text.trim() : null,
+          "experience_years":
+              _role == RegisterRole.therapist
+                  ? int.tryParse(_experienceYears.text.trim())
+                  : null,
         },
       );
 if (!mounted) return;
@@ -375,47 +388,175 @@ if (!mounted) return;
 
                         _Label("Select Your Physiotherapist"),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: RegisterScreen.kCardBorder),
-                            borderRadius: BorderRadius.circular(14),
-                            color: Colors.white,
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              isExpanded: true,
-                              value: _selectedTherapistId,
-                              hint: const Text("Choose physiotherapist"),
-                              items: _therapists
-                                  .map(
-                                    (t) => DropdownMenuItem<String>(
-                                      value: t["id"]?.toString(),
-                                      child: Text(
-                                        (t["full_name"] ?? "Unnamed").toString(),
-                                        overflow: TextOverflow.ellipsis,
+                        if (_loadingTherapists)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: RegisterScreen.kPrimary,
+                              ),
+                            ),
+                          )
+                        else if (_therapists.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: RegisterScreen.kCardBorder),
+                            ),
+                            child: const Text(
+                              "No physiotherapists available yet.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: RegisterScreen.kSubText,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          )
+                        else
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 260),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: _therapists.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final t = _therapists[index];
+                                final id = t["id"]?.toString() ?? "";
+                                final isSelected = _selectedTherapistId == id;
+                                final name =
+                                    (t["full_name"] ?? "Unnamed").toString();
+                                final clinic =
+                                    (t["clinic_address"] ?? "").toString();
+                                final exp = t["experience_years"];
+
+                                return GestureDetector(
+                                  onTap: () {
+                                    setState(
+                                        () => _selectedTherapistId = id);
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? RegisterScreen.kPrimary
+                                              .withOpacity(0.08)
+                                          : Colors.white,
+                                      borderRadius:
+                                          BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? RegisterScreen.kPrimary
+                                            : RegisterScreen.kCardBorder,
+                                        width: isSelected ? 2 : 1,
                                       ),
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: _loadingTherapists
-                                  ? null
-                                  : (value) {
-                                      setState(() => _selectedTherapistId = value);
-                                    },
+                                    child: Row(
+                                      children: [
+                                        // Avatar
+                                        CircleAvatar(
+                                          radius: 22,
+                                          backgroundColor: isSelected
+                                              ? RegisterScreen.kPrimary
+                                              : RegisterScreen.kSubText
+                                                  .withOpacity(0.15),
+                                          child: Icon(
+                                            Icons.person,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : RegisterScreen.kSubText,
+                                            size: 22,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        // Details
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 15,
+                                                  color: isSelected
+                                                      ? RegisterScreen
+                                                          .kDarkText
+                                                      : RegisterScreen
+                                                          .kDarkText,
+                                                ),
+                                              ),
+                                              if (clinic.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.location_on_outlined,
+                                                      size: 14,
+                                                      color: RegisterScreen
+                                                          .kSubText,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        clinic,
+                                                        style: const TextStyle(
+                                                          fontSize: 12.5,
+                                                          color: RegisterScreen
+                                                              .kSubText,
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                              if (exp != null) ...[
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.workspace_premium_outlined,
+                                                      size: 14,
+                                                      color: RegisterScreen
+                                                          .kSubText,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      "$exp yrs experience",
+                                                      style: const TextStyle(
+                                                        fontSize: 12.5,
+                                                        color: RegisterScreen
+                                                            .kSubText,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        // Check icon
+                                        if (isSelected)
+                                          const Icon(
+                                            Icons.check_circle,
+                                            color: RegisterScreen.kPrimary,
+                                            size: 24,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                        ),
-                        if (_loadingTherapists) ...[
-                          const SizedBox(height: 10),
-                          const Text(
-                            "Loading physiotherapists...",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: RegisterScreen.kSubText,
-                            ),
-                          ),
-                        ],
                       ] else ...[
                         _Label("Phone Number (Therapist)"),
                         const SizedBox(height: 8),
@@ -423,6 +564,24 @@ if (!mounted) return;
                           controller: _therapistPhone,
                           hint: "9876543210",
                           keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 14),
+
+                        _Label("Clinic Address"),
+                        const SizedBox(height: 8),
+                        _TextField(
+                          controller: _clinicAddress,
+                          hint: "Clinic name, street, city",
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 14),
+
+                        _Label("Years of Experience"),
+                        const SizedBox(height: 8),
+                        _TextField(
+                          controller: _experienceYears,
+                          hint: "e.g. 5",
+                          keyboardType: TextInputType.number,
                         ),
                       ],
 

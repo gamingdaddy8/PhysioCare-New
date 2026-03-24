@@ -10,6 +10,8 @@ import 'unified_pose_utils.dart';
 import 'web_bicep_curl_logic.dart';
 import 'web_side_raise_logic.dart';
 import 'web_squat_logic.dart';
+import 'web_hip_abduction_logic.dart';
+import 'web_knee_extension_logic.dart';
 
 class WebPoseView extends StatefulWidget {
   const WebPoseView({
@@ -37,6 +39,8 @@ class _WebPoseViewState extends State<WebPoseView> {
   final WebBicepCurlLogic  _bicepCounter   = WebBicepCurlLogic();
   final WebSideRaiseLogic  _sideRaiseLogic = WebSideRaiseLogic();
   final WebSquatLogic      _squatLogic     = WebSquatLogic();
+  final WebHipAbductionLogic _hipAbductionLogic = WebHipAbductionLogic();
+  final WebKneeExtensionLogic _kneeExtensionLogic = WebKneeExtensionLogic();
 
   UnifiedPose? _lastPose;
   String _feedback = 'Waiting for pose...';
@@ -58,16 +62,14 @@ class _WebPoseViewState extends State<WebPoseView> {
 
     WebMediapipeBridge.init((landmarks) {
       if (!mounted) return;
+      debugPrint('WebPoseView: received ${landmarks.length} landmarks');
 
-      final list = landmarks
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .map((m) => UnifiedLandmark(
-                x:          (m['x']          ?? 0).toDouble(),
-                y:          (m['y']          ?? 0).toDouble(),
-                z:          (m['z']          ?? 0).toDouble(),
-                visibility: (m['visibility'] ?? 1).toDouble(),
-              ))
-          .toList();
+      final list = landmarks.map((m) => UnifiedLandmark(
+            x:          m['x']          ?? 0.0,
+            y:          m['y']          ?? 0.0,
+            z:          m['z']          ?? 0.0,
+            visibility: m['visibility'] ?? 1.0,
+          )).toList();
 
       final pose = UnifiedPose(list);
       setState(() => _lastPose = pose);
@@ -79,6 +81,7 @@ class _WebPoseViewState extends State<WebPoseView> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint('WebPoseView: calling startMediapipePose...');
       startMediapipePose('mp-video');
     });
   }
@@ -97,6 +100,10 @@ class _WebPoseViewState extends State<WebPoseView> {
       msg = _sideRaiseLogic.update(pose);
     } else if (_selectedExercise == ExerciseType.squats) {
       msg = _squatLogic.update(pose);
+    } else if (_selectedExercise == ExerciseType.standingHipAbduction) {
+      msg = _hipAbductionLogic.update(pose);
+    } else if (_selectedExercise == ExerciseType.seatedKneeExtension) {
+      msg = _kneeExtensionLogic.update(pose);
     }
 
     if (msg != null && msg.trim().isNotEmpty) {
@@ -120,6 +127,8 @@ class _WebPoseViewState extends State<WebPoseView> {
       case ExerciseType.bicepCurl: return _bicepCounter.reps;
       case ExerciseType.sideRaise: return _sideRaiseLogic.reps;
       case ExerciseType.squats:    return _squatLogic.reps;
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.leftReps + _hipAbductionLogic.rightReps;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.leftReps + _kneeExtensionLogic.rightReps;
     }
   }
 
@@ -139,6 +148,8 @@ class _WebPoseViewState extends State<WebPoseView> {
       _bicepCounter.reset();
       _sideRaiseLogic.reset();
       _squatLogic.reset();
+      _hipAbductionLogic.reset();
+      _kneeExtensionLogic.reset();
     });
   }
 
@@ -176,6 +187,34 @@ class _WebPoseViewState extends State<WebPoseView> {
       final target = (_squatLogic.reps % 2 == 0) ? 95.0 : 170.0;
       return (100 - (angle - target).abs() * 0.9).clamp(0, 100);
     }
+    if (_selectedExercise == ExerciseType.standingHipAbduction) {
+      final left  = _hipAbductionLogic.leftAngle;
+      final right = _hipAbductionLogic.rightAngle;
+      double scoreFor(double angle) {
+        final target = angle > 160 ? 175.0 : 135.0;
+        return (100 - (angle - target).abs()).clamp(0, 100);
+      }
+      final scores = <double>[
+        if (left  > 0) scoreFor(left),
+        if (right > 0) scoreFor(right),
+      ];
+      if (scores.isEmpty) return 0;
+      return scores.reduce((a, b) => a + b) / scores.length;
+    }
+    if (_selectedExercise == ExerciseType.seatedKneeExtension) {
+      final left  = _kneeExtensionLogic.leftAngle;
+      final right = _kneeExtensionLogic.rightAngle;
+      double scoreFor(double angle) {
+        final target = angle > 140 ? 180.0 : 90.0;
+        return (100 - (angle - target).abs() * 0.9).clamp(0, 100);
+      }
+      final scores = <double>[
+        if (left  > 0) scoreFor(left),
+        if (right > 0) scoreFor(right),
+      ];
+      if (scores.isEmpty) return 0;
+      return scores.reduce((a, b) => a + b) / scores.length;
+    }
     return 0;
   }
 
@@ -199,6 +238,8 @@ class _WebPoseViewState extends State<WebPoseView> {
       case ExerciseType.bicepCurl: return 'Bicep Curl';
       case ExerciseType.sideRaise: return 'Side Raise';
       case ExerciseType.squats:    return 'Squats';
+      case ExerciseType.standingHipAbduction: return 'Standing Hip Abduction';
+      case ExerciseType.seatedKneeExtension: return 'Seated Knee Extension';
     }
   }
 
@@ -214,24 +255,13 @@ class _WebPoseViewState extends State<WebPoseView> {
           padding: const EdgeInsets.all(12),
           child: Row(children: [
             Expanded(
-              child: DropdownButton<ExerciseType>(
-                value: _selectedExercise,
-                items: const [
-                  DropdownMenuItem(
-                      value: ExerciseType.bicepCurl,
-                      child: Text('Bicep Curl')),
-                  DropdownMenuItem(
-                      value: ExerciseType.sideRaise,
-                      child: Text('Side Raise')),
-                  DropdownMenuItem(
-                      value: ExerciseType.squats,
-                      child: Text('Squats')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _selectedExercise = v);
-                  _reset();
-                },
+              child: Text(
+                _exerciseName(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
             ),
           ]),

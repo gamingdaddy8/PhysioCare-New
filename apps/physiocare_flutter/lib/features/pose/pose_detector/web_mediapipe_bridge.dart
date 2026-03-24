@@ -1,25 +1,48 @@
-import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'package:flutter/foundation.dart';
+
+// ── JS external declarations ──────────────────────────────────
 
 @JS('startMediapipePose')
-external JSPromise startMediapipePose(String videoId);
+external void startMediapipePose(String videoId);
 
 @JS('stopMediapipePose')
 external void stopMediapipePose();
 
-@JS('onPoseLandmarks')
-external set onPoseLandmarks(JSFunction f);
+// ── Bridge class ──────────────────────────────────────────────
 
 class WebMediapipeBridge {
-  static void init(void Function(List<dynamic> landmarks) onLandmarks) {
-    onPoseLandmarks = ((JSAny? landmarks) {
+  static void init(
+      void Function(List<Map<String, double>>) onLandmarks) {
+    if (!kIsWeb) return;
+
+    globalContext['onPoseLandmarks'] = ((JSArray jsArr) {
       try {
-        final dartObj = landmarks?.dartify();
-        if (dartObj == null) return;
-        final jsonString = jsonEncode(dartObj);
-        final decoded = jsonDecode(jsonString) as List<dynamic>;
-        onLandmarks(decoded);
-      } catch (_) {}
-    }).toJS;
+        final int length = jsArr.length;
+        final List<Map<String, double>> result = [];
+
+        for (int i = 0; i < length; i++) {
+          final item = jsArr.getProperty<JSObject>(i.toJS);
+          result.add({
+            'x':          _num(item, 'x'),
+            'y':          _num(item, 'y'),
+            'z':          _num(item, 'z'),
+            'visibility': _num(item, 'visibility'),
+          });
+        }
+
+        onLandmarks(result);
+      } catch (e) {
+        debugPrint('WebMediapipeBridge error: $e');
+      }
+    }.toJS);
+  }
+
+  static double _num(JSObject obj, String key) {
+    final val = obj.getProperty<JSAny?>(key.toJS);
+    if (val == null) return 0.0;
+    // JSNumber.toDartDouble is the correct Dart 3 API
+    return (val as JSNumber).toDartDouble;
   }
 }

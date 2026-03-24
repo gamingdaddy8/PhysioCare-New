@@ -4,4 +4,6 @@ enum ExerciseType {
   bicepCurl,
   sideRaise,
   squats,
+  standingHipAbduction,
+  seatedKneeExtension,
 }

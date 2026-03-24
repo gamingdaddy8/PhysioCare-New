@@ -70,14 +70,18 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
     if (t.contains('bicep') || t.contains('curl')) return ExerciseType.bicepCurl;
     if (t.contains('side') || t.contains('raise')) return ExerciseType.sideRaise;
     if (t.contains('squat'))                        return ExerciseType.squats;
+    if (t.contains('abduction'))                    return ExerciseType.standingHipAbduction;
+    if (t.contains('knee'))                         return ExerciseType.seatedKneeExtension;
     return ExerciseType.bicepCurl;
   }
 
   String _exerciseTypeTitle(ExerciseType ex) {
     switch (ex) {
-      case ExerciseType.bicepCurl: return 'Bicep Curl';
-      case ExerciseType.sideRaise: return 'Side Raise';
-      case ExerciseType.squats:    return 'Squats';
+      case ExerciseType.bicepCurl:          return 'Bicep Curl';
+      case ExerciseType.sideRaise:          return 'Side Raise';
+      case ExerciseType.squats:             return 'Squats';
+      case ExerciseType.standingHipAbduction: return 'Standing Hip Abduction';
+      case ExerciseType.seatedKneeExtension:  return 'Seated Knee Extension';
     }
   }
 
@@ -333,33 +337,12 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
   Widget _cameraPanel() {
     return _PanelCard(
       label: 'Your Camera',
-      topRightWidget: DropdownButtonHideUnderline(
-        child: DropdownButton<ExerciseType>(
-          value: _exercise,
-          dropdownColor: Colors.white,
-          style: const TextStyle(
-              color: kTextDark, fontWeight: FontWeight.w700),
-          items: const [
-            DropdownMenuItem(
-                value: ExerciseType.bicepCurl,
-                child: Text('Bicep Curl')),
-            DropdownMenuItem(
-                value: ExerciseType.sideRaise,
-                child: Text('Side Raise')),
-            DropdownMenuItem(
-                value: ExerciseType.squats,
-                child: Text('Squats')),
-          ],
-          onChanged: (val) {
-            if (val == null) return;
-            setState(() {
-              _exercise    = val;
-              _currentRep  = 0;
-              _stopwatch
-                ..reset()
-                ..start();
-            });
-          },
+      topRightWidget: Text(
+        _exerciseTypeTitle(_exercise),
+        style: const TextStyle(
+          color: kTextDark,
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
         ),
       ),
       child: kIsWeb
@@ -413,7 +396,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
                           color: kTextDark),
                     ),
                     Text(
-                      'of \$_targetReps',
+                      'of $_targetReps',
                       style: const TextStyle(
                           fontSize: 13, color: kSub),
                     ),
@@ -432,7 +415,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'Accuracy: \${_liveAccuracy.toStringAsFixed(0)}%',
+                'Accuracy: ${_liveAccuracy.toStringAsFixed(0)}%',
                 style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     color: kPrimary,
@@ -444,7 +427,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
             Text(
               _currentRep >= _targetReps
                   ? '🎉 Target reached!'
-                  : '\${_targetReps - _currentRep} reps remaining',
+                  : '${_targetReps - _currentRep} reps remaining',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: _currentRep >= _targetReps
