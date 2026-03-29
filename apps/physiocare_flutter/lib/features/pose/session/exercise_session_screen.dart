@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/services/audio_feedback_service.dart';
 import '../pose_detector/camera_pose_view.dart';
 import '../pose_detector/exercise_type.dart';
-import '../pose_detector/web_pose_view.dart';
+import '../pose_detector/web_pose_view_stub.dart'
+    if (dart.library.js_interop) '../pose_detector/web_pose_view.dart';
 import '../pose_detector/exercise_reference_player.dart';
 
 class ExerciseSessionScreen extends StatefulWidget {
@@ -57,11 +59,13 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
     }
 
     _stopwatch.start();
+    AudioFeedbackService.instance.init();
   }
 
   @override
   void dispose() {
     _stopwatch.stop();
+    AudioFeedbackService.instance.stop();
     super.dispose();
   }
 
@@ -235,8 +239,11 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
           else
             IconButton(
               tooltip: 'Audio',
-              onPressed: () =>
-                  setState(() => _audioEnabled = !_audioEnabled),
+              onPressed: () {
+                final newVal = !_audioEnabled;
+                setState(() => _audioEnabled = newVal);
+                AudioFeedbackService.instance.enabled = newVal;
+              },
               icon: Icon(_audioEnabled
                   ? Icons.volume_up_outlined
                   : Icons.volume_off_outlined),
@@ -350,12 +357,14 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
               initialExercise:    _exercise,
               onRepCompleted:     _onRepCompleted,
               onAccuracyUpdated:  _onAccuracyUpdated,
+              targetReps:         _targetReps,
             )
           : CameraPoseView(
               showOverlayUI:     false,
               initialExercise:   _exercise,
               onRepCompleted:    _onRepCompleted,
               onAccuracyUpdated: _onAccuracyUpdated,
+              targetReps:        _targetReps,
             ),
     );
   }
@@ -411,7 +420,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: kPrimary.withOpacity(0.12),
+                color: kPrimary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -486,7 +495,7 @@ class _SessionCompleteDialog extends StatelessWidget {
             height: 70,
             width: 70,
             decoration: BoxDecoration(
-              color: const Color(0xFF1FC7B6).withOpacity(0.12),
+              color: const Color(0xFF1FC7B6).withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle,

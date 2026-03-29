@@ -37,28 +37,38 @@ window.startMediapipePose = async function (videoId) {
   videoElement.srcObject = stream;
   await videoElement.play();
 
-  pose = new Pose({
-    locateFile: (file) => `mediapipe/pose/${file}`,
-  });
+  try {
+    pose = new Pose({
+      locateFile: (file) => `mediapipe/pose/${file}`,
+    });
 
-  pose.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
-    enableSegmentation: false,
-    selfieMode: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  });
+    pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      selfieMode: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
 
-  pose.onResults((results) => {
-    if (results.poseLandmarks && window.onPoseLandmarks) {
-      window.onPoseLandmarks(results.poseLandmarks);
-    }
-  });
+    pose.onResults((results) => {
+      if (results.poseLandmarks && window.onPoseLandmarks) {
+        window.onPoseLandmarks(results.poseLandmarks);
+      }
+    });
+  } catch (e) {
+    console.error("Failed to initialize MediaPipe Pose:", e);
+    return;
+  }
 
   async function frameLoop() {
     if (!pose || !videoElement) return;
-    await pose.send({ image: videoElement });
+    try {
+      await pose.send({ image: videoElement });
+    } catch (e) {
+      console.error("Error sending image to MediaPipe:", e);
+      return;
+    }
     requestAnimationFrame(frameLoop);
   }
 

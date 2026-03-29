@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
+import '../../../core/services/audio_feedback_service.dart';
+import '../feedback_engine/feedback_engine.dart';
 import '../rep_counter/bicep_curl_counter.dart';
 import '../rep_counter/side_raise_logic.dart';
 import '../rep_counter/squat_logic.dart';
@@ -23,6 +25,7 @@ class CameraPoseView extends StatefulWidget {
     this.onExerciseChanged,
     this.onRepCompleted,
     this.onAccuracyUpdated,
+    this.targetReps = 0,
   });
 
   final bool showOverlayUI;
@@ -34,6 +37,9 @@ class CameraPoseView extends StatefulWidget {
 
   /// Called periodically with the live session accuracy (0-100).
   final ValueChanged<double>? onAccuracyUpdated;
+
+  /// Total reps target — used for milestone audio announcements.
+  final int targetReps;
 
   @override
   State<CameraPoseView> createState() => _CameraPoseViewState();
@@ -188,6 +194,14 @@ class _CameraPoseViewState extends State<CameraPoseView> {
     if (current > _prevTotalReps) {
       _prevTotalReps = current;
       widget.onRepCompleted!(current);
+
+      // Milestone message takes priority over plain rep count
+      final milestone = FeedbackEngine.repMilestoneMessage(current, widget.targetReps);
+      if (milestone != null) {
+        AudioFeedbackService.instance.speakRep(milestone);
+      } else {
+        AudioFeedbackService.instance.speakRep(FeedbackEngine.repAnnouncement(current));
+      }
     }
   }
 
@@ -196,7 +210,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       case ExerciseType.bicepCurl:
         return _bicepCounter.leftReps + _bicepCounter.rightReps;
       case ExerciseType.sideRaise:
-        return _sideRaiseLogic.leftReps + _sideRaiseLogic.rightReps;
+        return _sideRaiseLogic.reps;
       case ExerciseType.squats:
         return _squatLogic.reps;
       case ExerciseType.standingHipAbduction:
@@ -266,7 +280,9 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       final r = _sideRaiseLogic.rightAngle;
       if (l == 0 && r == 0) {
         msg = 'Stand in frame with arms visible'; color = Colors.orangeAccent;
-      } else if (l > 75 || r > 75) {
+      } else if ((l - r).abs() > 30 && (l > 30 || r > 30)) {
+        msg = 'Raise both arms together'; color = Colors.orange;
+      } else if (l > 75 && r > 75) {
         msg = 'Great! Hold at shoulder height 🔥'; color = Colors.greenAccent;
       } else if (l < 30 && r < 30) {
         msg = 'Raise your arms sideways'; color = Colors.white;
@@ -300,6 +316,12 @@ class _CameraPoseViewState extends State<CameraPoseView> {
         _feedbackText  = msg;
         _feedbackColor = color;
       });
+      // Speak guidance (skip generic status strings — those aren't actionable)
+      if (msg.isNotEmpty &&
+          msg != 'No pose detected...' &&
+          msg != 'Pose detected ✅ Start moving') {
+        AudioFeedbackService.instance.speakGuidance(msg);
+      }
     }
   }
 
@@ -408,7 +430,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
   int _leftReps() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.leftReps;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.leftReps;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.reps;
       case ExerciseType.squats:    return _squatLogic.reps;
       case ExerciseType.standingHipAbduction: return _hipAbductionLogic.leftReps;
       case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.leftReps;
@@ -418,7 +440,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
   int _rightReps() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.rightReps;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.rightReps;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.reps;
       case ExerciseType.squats:    return _squatLogic.reps;
       case ExerciseType.standingHipAbduction: return _hipAbductionLogic.rightReps;
       case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.rightReps;
@@ -448,7 +470,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
   String _leftStage() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.leftStage;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.leftStage;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.stage;
       case ExerciseType.squats:    return _squatLogic.reps > 0 ? 'Counting' : 'Ready';
       case ExerciseType.standingHipAbduction: return _hipAbductionLogic.leftStage;
       case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.leftStage;
@@ -458,7 +480,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
   String _rightStage() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.rightStage;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.rightStage;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.stage;
       case ExerciseType.squats:    return _squatLogic.reps > 0 ? 'Counting' : 'Ready';
       case ExerciseType.standingHipAbduction: return _hipAbductionLogic.rightStage;
       case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.rightStage;
@@ -508,7 +530,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
+                          color: Colors.black.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
@@ -541,7 +563,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.10),
+                                color: Colors.white.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.white24),
                               ),

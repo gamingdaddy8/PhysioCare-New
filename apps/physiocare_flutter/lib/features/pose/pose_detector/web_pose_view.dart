@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/services/audio_feedback_service.dart';
+import '../feedback_engine/feedback_engine.dart';
 import 'exercise_type.dart';
 import 'web_mediapipe_bridge.dart';
 import 'web_camera_preview.dart';
@@ -19,6 +21,7 @@ class WebPoseView extends StatefulWidget {
     this.initialExercise = ExerciseType.bicepCurl,
     this.onRepCompleted,
     this.onAccuracyUpdated,
+    this.targetReps = 0,
   });
 
   final ExerciseType initialExercise;
@@ -28,6 +31,9 @@ class WebPoseView extends StatefulWidget {
 
   /// Called periodically with the live session accuracy (0-100).
   final ValueChanged<double>? onAccuracyUpdated;
+
+  /// Total reps target — used for milestone audio announcements.
+  final int targetReps;
 
   @override
   State<WebPoseView> createState() => _WebPoseViewState();
@@ -53,10 +59,13 @@ class _WebPoseViewState extends State<WebPoseView> {
   DateTime _lastFeedbackTime = DateTime.fromMillisecondsSinceEpoch(0);
   final Duration _feedbackCooldown = const Duration(milliseconds: 350);
 
+  late final String _viewId;
+
   @override
   void initState() {
     super.initState();
     _selectedExercise = widget.initialExercise;
+    _viewId = 'mp-video-${DateTime.now().millisecondsSinceEpoch}';
 
     if (!kIsWeb) return;
 
@@ -82,7 +91,7 @@ class _WebPoseViewState extends State<WebPoseView> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('WebPoseView: calling startMediapipePose...');
-      startMediapipePose('mp-video');
+      startMediapipePose(_viewId);
     });
   }
 
@@ -111,6 +120,10 @@ class _WebPoseViewState extends State<WebPoseView> {
       if (now.difference(_lastFeedbackTime) >= _feedbackCooldown) {
         _lastFeedbackTime = now;
         setState(() => _feedback = msg!);
+        // Speak guidance only (rep announcements are handled in _notifyRepCallback)
+        if (msg != 'Nice rep!' && msg != 'Nice squat!' && msg != 'Nice rep!') {
+          AudioFeedbackService.instance.speakGuidance(msg!);
+        }
       }
     }
   }
@@ -134,11 +147,18 @@ class _WebPoseViewState extends State<WebPoseView> {
 
   /// Fire onRepCompleted whenever total reps increases
   void _notifyRepCallback() {
-    if (widget.onRepCompleted == null) return;
     final current = _currentReps();
     if (current > _prevTotalReps) {
       _prevTotalReps = current;
-      widget.onRepCompleted!(current);
+      widget.onRepCompleted?.call(current);
+
+      // Milestone message takes priority over plain rep count
+      final milestone = FeedbackEngine.repMilestoneMessage(current, widget.targetReps);
+      if (milestone != null) {
+        AudioFeedbackService.instance.speakRep(milestone);
+      } else {
+        AudioFeedbackService.instance.speakRep(FeedbackEngine.repAnnouncement(current));
+      }
     }
   }
 
@@ -273,7 +293,7 @@ class _WebPoseViewState extends State<WebPoseView> {
               child: Container(
                 color: Colors.black,
                 child: Stack(fit: StackFit.expand, children: [
-                  const WebCameraPreview(viewId: 'mp-video'),
+                  WebCameraPreview(viewId: _viewId),
 
                   if (_lastPose != null)
                     CustomPaint(
