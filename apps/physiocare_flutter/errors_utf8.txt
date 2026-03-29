@@ -1,0 +1,67 @@
+﻿Analyzing physiocare_flutter...                                 
+
+warning - Unused import: 'package:flutter/material.dart' - lib\data\services\auth_service.dart:1:8 - unused_import
+   info - Use a function declaration rather than a variable assignment to bind a function to a name - lib\data\services\exercise_service.dart:57:11 - prefer_function_declarations_over_variables
+   info - Use a function declaration rather than a variable assignment to bind a function to a name - lib\data\services\therapist_service.dart:82:11 - prefer_function_declarations_over_variables
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\landing_screen.dart:227:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\landing_screen.dart:547:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\landing_screen.dart:560:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\landing_screen.dart:725:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\landing_screen.dart:761:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\login_screen.dart:147:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\login_screen.dart:159:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\login_screen.dart:178:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\register_screen.dart:210:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\register_screen.dart:222:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\register_screen.dart:241:45 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\features\auth\screens\register_screen.dart:424:53 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\register_screen.dart:447:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\register_screen.dart:466:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\auth\screens\register_screen.dart:678:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\exercises\my_exercises_screen.dart:304:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\exercises\my_exercises_screen.dart:335:47 - deprecated_member_use
+warning - The value of the field 'kPrimary' isn't used - lib\features\patient\home\patient_portal_home_screen.dart:14:22 - unused_field
+warning - The value of the field 'kSub' isn't used - lib\features\patient\home\patient_portal_home_screen.dart:17:22 - unused_field
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\home\patient_portal_home_screen.dart:405:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\home\patient_portal_home_screen.dart:434:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\home\patient_portal_home_screen.dart:607:46 - deprecated_member_use
+   info - Unnecessary braces in a string interpolation - lib\features\patient\reports\session_reports_screen.dart:114:25 - unnecessary_brace_in_string_interps
+   info - Unnecessary use of string interpolation - lib\features\patient\reports\session_reports_screen.dart:208:45 - unnecessary_string_interpolations
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\reports\session_reports_screen.dart:293:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\reports\session_reports_screen.dart:341:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\patient\reports\session_reports_screen.dart:387:33 - deprecated_member_use
+   info - The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\features\pose\pose_detector\camera_pose_view.dart:1:8 - unnecessary_import
+   info - The import of 'package:google_mlkit_commons/google_mlkit_commons.dart' is unnecessary because all of the used elements are also provided by the import of 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' - lib\features\pose\pose_detector\camera_pose_view.dart:6:8 - unnecessary_import
+warning - The declaration '_exerciseTitle' isn't referenced - lib\features\pose\pose_detector\camera_pose_view.dart:394:10 - unused_element
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\pose\pose_detector\camera_pose_view.dart:435:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\pose\pose_detector\camera_pose_view.dart:483:53 - deprecated_member_use
+   info - Unnecessary braces in a string interpolation - lib\features\pose\pose_detector\exercise_reference_player.dart:53:42 - unnecessary_brace_in_string_interps
+   info - Unnecessary use of multiple underscores - lib\features\pose\pose_detector\exercise_reference_player.dart:126:37 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\features\pose\pose_detector\exercise_reference_player.dart:126:41 - unnecessary_underscores
+warning - Unused import: 'dart:ui' - lib\features\pose\pose_detector\mlkit_pose_service.dart:1:8 - unused_import
+   info - The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\features\pose\pose_detector\pose_painter.dart:1:8 - unnecessary_import
+   info - The local variable '_mapPoint' starts with an underscore - lib\features\pose\pose_detector\pose_painter.dart:28:12 - no_leading_underscores_for_local_identifiers
+warning - Unused import: 'package:flutter/material.dart' - lib\features\pose\pose_detector\pose_view_stub.dart:1:8 - unused_import
+warning - Unused import: 'dart:ui' - lib\features\pose\pose_detector\unified_pose.dart:1:8 - unused_import
+   info - The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\features\pose\pose_detector\unified_pose_painter.dart:1:8 - unnecessary_import
+  error - The getter 'toDart' isn't defined for the type 'JSNumber' - lib\features\pose\pose_detector\web_mediapipe_bridge.dart:46:30 - undefined_getter
+warning - The declaration '_exerciseTypeTitle' isn't referenced - lib\features\pose\session\exercise_session_screen.dart:76:10 - unused_element
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\pose\session\exercise_session_screen.dart:431:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\pose\session\exercise_session_screen.dart:506:46 - deprecated_member_use
+   info - Use the null-aware marker '?' rather than a null check via an 'if' - lib\features\pose\session\exercise_session_screen.dart:613:15 - use_null_aware_elements
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\features\therapist\home\therapist_home_screen.dart:146:17 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\home\therapist_home_screen.dart:353:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\home\therapist_home_screen.dart:355:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\home\therapist_home_screen.dart:410:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\home\therapist_home_screen.dart:478:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\home\therapist_home_screen.dart:528:50 - deprecated_member_use
+   info - Use a function declaration rather than a variable assignment to bind a function to a name - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:196:11 - prefer_function_declarations_over_variables
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:470:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:472:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:511:58 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:616:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:696:56 - deprecated_member_use
+warning - Dead code - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:745:18 - dead_code
+warning - The left operand can't be null, so the right operand is never executed - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:745:21 - dead_null_aware_expression
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\therapist\patient_details\therapist_patient_detail_screen.dart:964:13 - deprecated_member_use
+

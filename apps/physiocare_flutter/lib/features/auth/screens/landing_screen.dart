@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:physiocare_flutter/features/pose/pose_detector/camera_pose_screen.dart';
+import 'package:physiocare_flutter/features/pose/pose_detector/exercise_type.dart';
+import '../../../core/routes/app_routes.dart';
 
 class LandingScreen extends StatelessWidget {
   const LandingScreen({super.key});
@@ -114,7 +117,7 @@ class _Navbar extends StatelessWidget {
 
           TextButton(
             onPressed: () {
-              // TODO: Navigate to Login
+              Navigator.pushNamed(context, AppRoutes.login);
             },
             child: const Text(
               "Sign In",
@@ -128,7 +131,7 @@ class _Navbar extends StatelessWidget {
           _PrimaryButton(
             text: "Get Started",
             onTap: () {
-              // TODO: Navigate to Register
+              Navigator.pushNamed(context, AppRoutes.register);
             },
           ),
         ],
@@ -286,13 +289,70 @@ class _HeroSection extends StatelessWidget {
                   _PrimaryBigButton(
                     text: "Get Started",
                     onTap: () {
-                      // TODO: Navigate to Register
+                      Navigator.pushNamed(context, AppRoutes.register);
                     },
                   ),
                   _OutlineBigButton(
                     text: "Watch Demo",
                     onTap: () {
-                      // TODO: Open demo dialog/video
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Colors.white,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                        ),
+                        builder: (ctx) {
+                          return SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Select Exercise Demo',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: LandingScreen.kDarkText,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ...ExerciseType.values.map((ex) {
+                                    String title = '';
+                                    switch (ex) {
+                                      case ExerciseType.bicepCurl: title = 'Bicep Curl'; break;
+                                      case ExerciseType.sideRaise: title = 'Side Raise'; break;
+                                      case ExerciseType.squats: title = 'Squats'; break;
+                                      case ExerciseType.standingHipAbduction: title = 'Standing Hip Abduction'; break;
+                                      case ExerciseType.seatedKneeExtension: title = 'Seated Knee Extension'; break;
+                                    }
+                                    return ListTile(
+                                      leading: const Icon(Icons.play_circle_fill, color: LandingScreen.kPrimary, size: 28),
+                                      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                                      onTap: () {
+                                        Navigator.pop(ctx);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => CameraPoseScreen(initialExercise: ex),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  _OutlineBigButton(
+                    text: "Open Patient Portal",
+                    onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.patientHome);
                     },
                   ),
                 ],
