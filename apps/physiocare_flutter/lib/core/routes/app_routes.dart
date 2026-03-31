@@ -7,6 +7,8 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/patient/home/patient_portal_home_screen.dart';
 import '../../features/patient/exercises/my_exercises_screen.dart';
 import '../../features/patient/reports/session_reports_screen.dart';
+import '../../features/reports/screens/patient_report_screen.dart';
+import '../../features/reports/screens/therapist_report_screen.dart';
 
 import '../../features/pose/pose_detector/camera_pose_screen.dart';
 import '../../features/pose/session/exercise_session_screen.dart';
@@ -30,6 +32,10 @@ class AppRoutes {
   // Pose / Exercise
   static const poseTest = "/pose-test";
   static const exerciseSession = "/exercise-session";
+
+  // Reports
+  static const patientReport = "/patient-report";
+  static const therapistReport = "/therapist-report";
 
   static Map<String, WidgetBuilder> routes = {
     // First screen
@@ -57,5 +63,15 @@ class AppRoutes {
 
     // Exercise session UI
     exerciseSession: (context) => const ExerciseSessionScreen(),
+
+    // Reports
+    patientReport: (context) => const PatientReportScreen(),
+    therapistReport: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
+      return TherapistReportScreen(
+        patientId: args['patientId'] ?? '',
+        patientName: args['patientName'] ?? 'Patient',
+      );
+    },
   };
 }
