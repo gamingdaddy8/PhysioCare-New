@@ -22,7 +22,8 @@ class WebCameraPreview extends StatelessWidget {
         ..muted = true
         ..style.width = '100%'
         ..style.height = '100%'
-        ..style.objectFit = 'cover';
+        ..style.objectFit = 'cover'
+        ..style.transform = 'scaleX(-1)';
 
       return video;
     });

@@ -29,7 +29,7 @@ class UnifiedPosePainter extends CustomPainter {
       final lm = pose.landmarks[idx];
       if (lm.visibility < 0.3) return null;
 
-      final dx = isNormalized ? lm.x * size.width : (lm.x / sourceSize.width) * size.width;
+      final dx = isNormalized ? (1.0 - lm.x) * size.width : (1.0 - (lm.x / sourceSize.width)) * size.width;
       final dy = isNormalized ? lm.y * size.height : (lm.y / sourceSize.height) * size.height;
 
       return Offset(dx, dy);
