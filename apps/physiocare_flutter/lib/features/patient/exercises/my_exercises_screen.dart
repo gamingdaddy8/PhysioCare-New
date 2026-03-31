@@ -35,6 +35,13 @@ class _MyExercisesScreenState extends State<MyExercisesScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
+      // Auto-complete expired exercises
+      await _supabase
+          .from('assigned_exercises')
+          .update({'status': 'completed'})
+          .eq('status', 'active')
+          .lt('end_date', DateTime.now().toIso8601String().substring(0, 10));
+
       final rows = await _supabase
           .from('assigned_exercises')
           .select('''

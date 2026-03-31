@@ -457,7 +457,7 @@ class _QuickActionsRow extends StatelessWidget {
       _QuickActionCard(
           title: 'Reports',
           icon: Icons.description_outlined,
-          route: AppRoutes.patientReports),
+          route: AppRoutes.patientReport),
       _QuickActionCard(
           title: 'Schedule',
           icon: Icons.calendar_month_outlined,
