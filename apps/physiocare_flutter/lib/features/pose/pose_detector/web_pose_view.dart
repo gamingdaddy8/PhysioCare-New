@@ -73,8 +73,11 @@ class _WebPoseViewState extends State<WebPoseView> {
       if (!mounted) return;
       debugPrint('WebPoseView: received ${landmarks.length} landmarks');
 
+      // ✅ FIX: Flip x coordinate to match mirrored video feed (scaleX(-1))
+      // MediaPipe gives x=0 as real-world left, but video is CSS-mirrored,
+      // so we flip x here so skeleton + left/right detection both match screen.
       final list = landmarks.map((m) => UnifiedLandmark(
-            x:          m['x']          ?? 0.0,
+            x:          1.0 - (m['x'] ?? 0.0), // flipped to match mirrored video
             y:          m['y']          ?? 0.0,
             z:          m['z']          ?? 0.0,
             visibility: m['visibility'] ?? 1.0,

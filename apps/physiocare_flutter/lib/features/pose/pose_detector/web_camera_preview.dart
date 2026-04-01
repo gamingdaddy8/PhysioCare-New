@@ -23,7 +23,7 @@ class WebCameraPreview extends StatelessWidget {
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)';
+        ..style.transform = 'scaleX(-1)'; // mirror the video feed for natural feel
 
       return video;
     });
