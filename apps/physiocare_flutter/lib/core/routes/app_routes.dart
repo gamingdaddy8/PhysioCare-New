@@ -6,14 +6,14 @@ import '../../features/auth/screens/register_screen.dart';
 
 import '../../features/patient/home/patient_portal_home_screen.dart';
 import '../../features/patient/exercises/my_exercises_screen.dart';
+import '../../features/patient/reports/session_reports_screen.dart';
+import '../../features/reports/screens/patient_report_screen.dart';
+import '../../features/reports/screens/therapist_report_screen.dart';
 
 import '../../features/pose/pose_detector/camera_pose_screen.dart';
 import '../../features/pose/session/exercise_session_screen.dart';
 
 import '../../features/therapist/home/therapist_home_screen.dart';
-
-// Report feature — new PatientReportScreen replaces the old SessionReportsScreen
-import '../../features/reports/screens/patient_report_screen.dart';
 
 class AppRoutes {
   static const splash = "/";
@@ -33,8 +33,9 @@ class AppRoutes {
   static const poseTest = "/pose-test";
   static const exerciseSession = "/exercise-session";
 
-  // Note: TherapistReportScreen is opened via Navigator.push (not a named route)
-  // because it requires patientId + patientName arguments passed at call-site.
+  // Reports
+  static const patientReport = "/patient-report";
+  static const therapistReport = "/therapist-report";
 
   static Map<String, WidgetBuilder> routes = {
     // First screen
@@ -47,7 +48,7 @@ class AppRoutes {
     // Patient Portal
     patientHome: (context) => const PatientPortalHomeScreen(),
     patientExercises: (context) => const MyExercisesScreen(),
-    patientReports: (context) => const PatientReportScreen(),
+    patientReports: (context) => const SessionReportsScreen(),
 
     // Schedule placeholder (for now)
     patientSchedule: (context) => const Scaffold(
@@ -57,10 +58,20 @@ class AppRoutes {
     // Therapist Portal
     therapistHome: (context) => const TherapistHomeScreen(),
 
-    // Pose screen (decides Web vs Mobile internally)
+    // Pose screen (this internally decides Web vs Mobile later)
     poseTest: (context) => const CameraPoseScreen(),
 
     // Exercise session UI
     exerciseSession: (context) => const ExerciseSessionScreen(),
+
+    // Reports
+    patientReport: (context) => const PatientReportScreen(),
+    therapistReport: (context) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
+      return TherapistReportScreen(
+        patientId: args['patientId'] ?? '',
+        patientName: args['patientName'] ?? 'Patient',
+      );
+    },
   };
 }

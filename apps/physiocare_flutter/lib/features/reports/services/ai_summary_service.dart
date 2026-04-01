@@ -9,7 +9,7 @@ class AiSummaryService {
   AiSummaryService({required this.apiKey});
 
   static const _endpoint =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
   Future<String> generateSummary(ReportModel report) async {
     if (report.totalSessions == 0) {

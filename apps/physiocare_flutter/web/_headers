@@ -1,6 +1,8 @@
 /*
   Content-Type: application/javascript; charset=utf-8
   X-Content-Type-Options: nosniff
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Opener-Policy: same-origin
 
 /mediapipe/pose/*.wasm
   Content-Type: application/wasm

@@ -6,8 +6,7 @@ import '../models/report_period.dart';
 import '../services/report_service.dart';
 import '../services/report_generator.dart';
 import '../services/ai_summary_service.dart';
-// TODO: uncomment and add your key:
-// import 'package:physiocare_flutter/config/env.dart';
+import 'package:physiocare_flutter/config/env.dart';
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
 const _kPrimary = Color(0xFF1FC7B6);
@@ -31,8 +30,7 @@ class TherapistReportScreen extends StatefulWidget {
 
 class _TherapistReportScreenState extends State<TherapistReportScreen> {
   final _reportService = ReportService();
-  // TODO: replace '' with Env.geminiApiKey once you have the key
-  final _aiService = AiSummaryService(apiKey: '');
+  final _aiService = AiSummaryService(apiKey: Env.geminiApiKey);
 
   ReportPeriod _period = ReportPeriod.week;
   ReportModel? _report;

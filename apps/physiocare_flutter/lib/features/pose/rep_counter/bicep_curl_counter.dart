@@ -8,6 +8,7 @@ class BicepCurlCounter {
   // ==========================
   final double upAngle = 60;     // arm bent
   final double downAngle = 160;  // arm straight
+  final Duration holdDuration = const Duration(seconds: 3);
 
   // ==========================
   // STATE
@@ -20,6 +21,19 @@ class BicepCurlCounter {
 
   double leftAngle = 0;
   double rightAngle = 0;
+
+  DateTime? leftHoldStart;
+  DateTime? rightHoldStart;
+
+  int leftHoldElapsedSeconds() {
+    if (leftHoldStart == null) return 0;
+    return DateTime.now().difference(leftHoldStart!).inSeconds;
+  }
+
+  int rightHoldElapsedSeconds() {
+    if (rightHoldStart == null) return 0;
+    return DateTime.now().difference(rightHoldStart!).inSeconds;
+  }
 
   // ==========================
   // MAIN UPDATE FUNCTION
@@ -36,44 +50,64 @@ class BicepCurlCounter {
     // LEFT ARM
     if (leftShoulder != null && leftElbow != null && leftWrist != null) {
       leftAngle = _calculateAngle(
-        leftShoulder.x,
-        leftShoulder.y,
-        leftElbow.x,
-        leftElbow.y,
-        leftWrist.x,
-        leftWrist.y,
+        leftShoulder.x, leftShoulder.y,
+        leftElbow.x, leftElbow.y,
+        leftWrist.x, leftWrist.y,
       );
 
-      // Stage logic
-      if (leftAngle > downAngle) {
-        leftStage = "down";
-      }
+      bool isUp = leftAngle < upAngle;
+      bool isDown = leftAngle > downAngle;
 
-      if (leftAngle < upAngle && leftStage == "down") {
-        leftStage = "up";
-        leftReps++;
+      if (isDown) {
+        if (leftStage == "up_done") leftReps++;
+        leftStage = "down";
+        leftHoldStart = null;
+      } else if (isUp) {
+        if (leftStage == "down") {
+          leftStage = "holding";
+          leftHoldStart = DateTime.now();
+        } else if (leftStage == "holding") {
+          if (DateTime.now().difference(leftHoldStart!) >= holdDuration) {
+            leftStage = "up_done";
+          }
+        }
+      } else {
+        if (leftStage == "holding" && leftAngle > upAngle + 25) {
+          leftStage = "down";
+          leftHoldStart = null;
+        }
       }
     }
 
     // RIGHT ARM
     if (rightShoulder != null && rightElbow != null && rightWrist != null) {
       rightAngle = _calculateAngle(
-        rightShoulder.x,
-        rightShoulder.y,
-        rightElbow.x,
-        rightElbow.y,
-        rightWrist.x,
-        rightWrist.y,
+        rightShoulder.x, rightShoulder.y,
+        rightElbow.x, rightElbow.y,
+        rightWrist.x, rightWrist.y,
       );
 
-      // Stage logic
-      if (rightAngle > downAngle) {
-        rightStage = "down";
-      }
+      bool isUp = rightAngle < upAngle;
+      bool isDown = rightAngle > downAngle;
 
-      if (rightAngle < upAngle && rightStage == "down") {
-        rightStage = "up";
-        rightReps++;
+      if (isDown) {
+        if (rightStage == "up_done") rightReps++;
+        rightStage = "down";
+        rightHoldStart = null;
+      } else if (isUp) {
+        if (rightStage == "down") {
+          rightStage = "holding";
+          rightHoldStart = DateTime.now();
+        } else if (rightStage == "holding") {
+          if (DateTime.now().difference(rightHoldStart!) >= holdDuration) {
+            rightStage = "up_done";
+          }
+        }
+      } else {
+        if (rightStage == "holding" && rightAngle > upAngle + 25) {
+          rightStage = "down";
+          rightHoldStart = null;
+        }
       }
     }
   }
@@ -85,23 +119,20 @@ class BicepCurlCounter {
     rightStage = "down";
     leftAngle = 0;
     rightAngle = 0;
+    leftHoldStart = null;
+    rightHoldStart = null;
   }
 
   // ==========================
   // ANGLE CALCULATION
   // ==========================
   double _calculateAngle(
-    double ax,
-    double ay,
-    double bx,
-    double by,
-    double cx,
-    double cy,
+    double ax, double ay,
+    double bx, double by,
+    double cx, double cy,
   ) {
-    // angle ABC (B = elbow)
     final abx = ax - bx;
     final aby = ay - by;
-
     final cbx = cx - bx;
     final cby = cy - by;
 
@@ -109,9 +140,8 @@ class BicepCurlCounter {
     final magAB = sqrt(abx * abx + aby * aby);
     final magCB = sqrt(cbx * cbx + cby * cby);
 
-    final cosAngle = dot / (magAB * magCB);
-    final angle = acos(cosAngle.clamp(-1.0, 1.0));
-
-    return angle * (180 / pi);
+    if (magAB == 0 || magCB == 0) return 0;
+    final cosAngle = (dot / (magAB * magCB)).clamp(-1.0, 1.0);
+    return acos(cosAngle) * (180 / pi);
   }
 }

@@ -6,9 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
+import '../../../core/services/audio_feedback_service.dart';
+import '../feedback_engine/feedback_engine.dart';
 import '../rep_counter/bicep_curl_counter.dart';
 import '../rep_counter/side_raise_logic.dart';
 import '../rep_counter/squat_logic.dart';
+import '../rep_counter/hip_abduction_logic.dart';
+import '../rep_counter/knee_extension_logic.dart';
 import 'exercise_type.dart';
 import 'mlkit_pose_service.dart';
 import 'pose_painter.dart';
@@ -21,6 +25,7 @@ class CameraPoseView extends StatefulWidget {
     this.onExerciseChanged,
     this.onRepCompleted,
     this.onAccuracyUpdated,
+    this.targetReps = 0,
   });
 
   final bool showOverlayUI;
@@ -32,6 +37,9 @@ class CameraPoseView extends StatefulWidget {
 
   /// Called periodically with the live session accuracy (0-100).
   final ValueChanged<double>? onAccuracyUpdated;
+
+  /// Total reps target — used for milestone audio announcements.
+  final int targetReps;
 
   @override
   State<CameraPoseView> createState() => _CameraPoseViewState();
@@ -65,6 +73,8 @@ class _CameraPoseViewState extends State<CameraPoseView> {
   final BicepCurlCounter _bicepCounter  = BicepCurlCounter();
   final SideRaiseLogic   _sideRaiseLogic = SideRaiseLogic();
   final SquatLogic       _squatLogic    = SquatLogic();
+  final HipAbductionLogic _hipAbductionLogic = HipAbductionLogic();
+  final KneeExtensionLogic _kneeExtensionLogic = KneeExtensionLogic();
 
   // Track previous rep counts to detect new reps
   int _prevTotalReps = 0;
@@ -170,6 +180,10 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       _sideRaiseLogic.update(pose);
     } else if (_selectedExercise == ExerciseType.squats) {
       _squatLogic.update(pose);
+    } else if (_selectedExercise == ExerciseType.standingHipAbduction) {
+      _hipAbductionLogic.update(pose);
+    } else if (_selectedExercise == ExerciseType.seatedKneeExtension) {
+      _kneeExtensionLogic.update(pose);
     }
   }
 
@@ -180,6 +194,14 @@ class _CameraPoseViewState extends State<CameraPoseView> {
     if (current > _prevTotalReps) {
       _prevTotalReps = current;
       widget.onRepCompleted!(current);
+
+      // Milestone message takes priority over plain rep count
+      final milestone = FeedbackEngine.repMilestoneMessage(current, widget.targetReps);
+      if (milestone != null) {
+        AudioFeedbackService.instance.speakRep(milestone);
+      } else {
+        AudioFeedbackService.instance.speakRep(FeedbackEngine.repAnnouncement(current));
+      }
     }
   }
 
@@ -188,9 +210,13 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       case ExerciseType.bicepCurl:
         return _bicepCounter.leftReps + _bicepCounter.rightReps;
       case ExerciseType.sideRaise:
-        return _sideRaiseLogic.leftReps + _sideRaiseLogic.rightReps;
+        return _sideRaiseLogic.reps;
       case ExerciseType.squats:
         return _squatLogic.reps;
+      case ExerciseType.standingHipAbduction:
+        return _hipAbductionLogic.leftReps + _hipAbductionLogic.rightReps;
+      case ExerciseType.seatedKneeExtension:
+        return _kneeExtensionLogic.leftReps + _kneeExtensionLogic.rightReps;
     }
   }
 
@@ -203,6 +229,8 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       _bicepCounter.reset();
       _sideRaiseLogic.reset();
       _squatLogic.reset();
+      _hipAbductionLogic.reset();
+      _kneeExtensionLogic.reset();
     });
   }
 
@@ -252,12 +280,34 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       final r = _sideRaiseLogic.rightAngle;
       if (l == 0 && r == 0) {
         msg = 'Stand in frame with arms visible'; color = Colors.orangeAccent;
-      } else if (l > 75 || r > 75) {
+      } else if ((l - r).abs() > 30 && (l > 30 || r > 30)) {
+        msg = 'Raise both arms together'; color = Colors.orange;
+      } else if (l > 75 && r > 75) {
         msg = 'Great! Hold at shoulder height 🔥'; color = Colors.greenAccent;
       } else if (l < 30 && r < 30) {
         msg = 'Raise your arms sideways'; color = Colors.white;
       } else {
         msg = 'Lift higher (towards 90°)'; color = Colors.white70;
+      }
+    } else if (_selectedExercise == ExerciseType.standingHipAbduction) {
+      final l = _hipAbductionLogic.leftAngle;
+      final r = _hipAbductionLogic.rightAngle;
+      if (l == 0 && r == 0) {
+        msg = 'Stand in frame with legs visible'; color = Colors.orangeAccent;
+      } else if (l < 155 || r < 155) {
+        msg = 'Good! Hold it out 🔥'; color = Colors.greenAccent;
+      } else {
+        msg = 'Lift leg sideways out'; color = Colors.white;
+      }
+    } else if (_selectedExercise == ExerciseType.seatedKneeExtension) {
+      final l = _kneeExtensionLogic.leftAngle;
+      final r = _kneeExtensionLogic.rightAngle;
+      if (l == 0 && r == 0) {
+        msg = 'Ensure legs are fully visible'; color = Colors.orangeAccent;
+      } else if (l > 165 || r > 165) {
+        msg = 'Great! Hold it straight 🔥'; color = Colors.greenAccent;
+      } else {
+        msg = 'Extend your knee straight'; color = Colors.white;
       }
     }
 
@@ -266,6 +316,12 @@ class _CameraPoseViewState extends State<CameraPoseView> {
         _feedbackText  = msg;
         _feedbackColor = color;
       });
+      // Speak guidance (skip generic status strings — those aren't actionable)
+      if (msg.isNotEmpty &&
+          msg != 'No pose detected...' &&
+          msg != 'Pose detected ✅ Start moving') {
+        AudioFeedbackService.instance.speakGuidance(msg);
+      }
     }
   }
 
@@ -315,6 +371,34 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       final target = kneeAngle < 140 ? 95.0 : 170.0;
       return (100 - (kneeAngle - target).abs() * 0.9).clamp(0, 100);
     }
+    if (_selectedExercise == ExerciseType.standingHipAbduction) {
+      final left  = _hipAbductionLogic.leftAngle;
+      final right = _hipAbductionLogic.rightAngle;
+      double scoreFor(double angle) {
+        final target = angle > 160 ? 175.0 : 135.0;
+        return (100 - (angle - target).abs()).clamp(0, 100);
+      }
+      final scores = <double>[
+        if (left  > 0) scoreFor(left),
+        if (right > 0) scoreFor(right),
+      ];
+      if (scores.isEmpty) return 0;
+      return scores.reduce((a, b) => a + b) / scores.length;
+    }
+    if (_selectedExercise == ExerciseType.seatedKneeExtension) {
+      final left  = _kneeExtensionLogic.leftAngle;
+      final right = _kneeExtensionLogic.rightAngle;
+      double scoreFor(double angle) {
+        final target = angle > 140 ? 180.0 : 90.0;
+        return (100 - (angle - target).abs() * 0.9).clamp(0, 100);
+      }
+      final scores = <double>[
+        if (left  > 0) scoreFor(left),
+        if (right > 0) scoreFor(right),
+      ];
+      if (scores.isEmpty) return 0;
+      return scores.reduce((a, b) => a + b) / scores.length;
+    }
     return 0;
   }
 
@@ -346,16 +430,20 @@ class _CameraPoseViewState extends State<CameraPoseView> {
   int _leftReps() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.leftReps;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.leftReps;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.reps;
       case ExerciseType.squats:    return _squatLogic.reps;
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.leftReps;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.leftReps;
     }
   }
 
   int _rightReps() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.rightReps;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.rightReps;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.reps;
       case ExerciseType.squats:    return _squatLogic.reps;
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.rightReps;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.rightReps;
     }
   }
 
@@ -364,6 +452,8 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       case ExerciseType.bicepCurl: return _bicepCounter.leftAngle;
       case ExerciseType.sideRaise: return _sideRaiseLogic.leftAngle;
       case ExerciseType.squats:    return 0;
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.leftAngle;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.leftAngle;
     }
   }
 
@@ -372,22 +462,28 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       case ExerciseType.bicepCurl: return _bicepCounter.rightAngle;
       case ExerciseType.sideRaise: return _sideRaiseLogic.rightAngle;
       case ExerciseType.squats:    return 0;
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.rightAngle;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.rightAngle;
     }
   }
 
   String _leftStage() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.leftStage;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.leftStage;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.stage;
       case ExerciseType.squats:    return _squatLogic.reps > 0 ? 'Counting' : 'Ready';
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.leftStage;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.leftStage;
     }
   }
 
   String _rightStage() {
     switch (_selectedExercise) {
       case ExerciseType.bicepCurl: return _bicepCounter.rightStage;
-      case ExerciseType.sideRaise: return _sideRaiseLogic.rightStage;
+      case ExerciseType.sideRaise: return _sideRaiseLogic.stage;
       case ExerciseType.squats:    return _squatLogic.reps > 0 ? 'Counting' : 'Ready';
+      case ExerciseType.standingHipAbduction: return _hipAbductionLogic.rightStage;
+      case ExerciseType.seatedKneeExtension: return _kneeExtensionLogic.rightStage;
     }
   }
 
@@ -396,6 +492,8 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       case ExerciseType.bicepCurl: return 'Bicep Curl';
       case ExerciseType.sideRaise: return 'Side Raise';
       case ExerciseType.squats:    return 'Squats';
+      case ExerciseType.standingHipAbduction: return 'Standing Hip Abduction';
+      case ExerciseType.seatedKneeExtension: return 'Seated Knee Extension';
     }
   }
 
@@ -432,7 +530,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
+                          color: Colors.black.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
@@ -443,28 +541,13 @@ class _CameraPoseViewState extends State<CameraPoseView> {
                                   style: TextStyle(
                                       color: Colors.white, fontSize: 14)),
                               const SizedBox(width: 10),
-                              DropdownButton<ExerciseType>(
-                                value: _selectedExercise,
-                                dropdownColor: Colors.black87,
-                                style: const TextStyle(color: Colors.white),
-                                underline: Container(
-                                    height: 1, color: Colors.white24),
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: ExerciseType.bicepCurl,
-                                      child: Text('Bicep Curl')),
-                                  DropdownMenuItem(
-                                      value: ExerciseType.sideRaise,
-                                      child: Text('Side Raise')),
-                                  DropdownMenuItem(
-                                      value: ExerciseType.squats,
-                                      child: Text('Squats')),
-                                ],
-                                onChanged: (val) {
-                                  if (val == null) return;
-                                  setState(() => _selectedExercise = val);
-                                  widget.onExerciseChanged?.call(val);
-                                },
+                              Text(
+                                _exerciseTitle(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
                               const Spacer(),
                               IconButton(
@@ -480,7 +563,7 @@ class _CameraPoseViewState extends State<CameraPoseView> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.10),
+                                color: Colors.white.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.white24),
                               ),

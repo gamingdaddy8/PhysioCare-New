@@ -1,9 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <meta charset="UTF-8">
   <base href="$FLUTTER_BASE_HREF">
 
-  <meta charset="UTF-8">
+  <!-- Load MediaPipe AFTER base href is set -->
+  <script src="mediapipe/pose/pose.js"></script>
+<!-- Your bridge -->
+<script src="mediapipe_pose.js"></script>
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
 
@@ -18,15 +35,8 @@
 
   <title>physiocare_flutter</title>
   <link rel="manifest" href="manifest.json">
-
-  <!-- MediaPipe Pose via CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 </head>
 <body>
-  <!-- Bridge script must load AFTER MediaPipe -->
-  <script src="mediapipe_pose.js"></script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

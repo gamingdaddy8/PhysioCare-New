@@ -35,6 +35,7 @@ class ReportGenerator {
         theme: theme,
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        maxPages: 20,
         header: (ctx) => _buildHeader(report, ctx),
         footer: (ctx) => _buildFooter(report, ctx),
         build: (ctx) => [
@@ -140,7 +141,7 @@ class ReportGenerator {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'Generated: ${_fmtDate(report.generatedAt)} • PhysioCare',
+            'Generated: ${_fmtDate(report.generatedAt)} | PhysioCare',
             style: pw.TextStyle(fontSize: 9, color: _sub),
           ),
           pw.Text(
@@ -289,7 +290,7 @@ class ReportGenerator {
           ),
           pw.SizedBox(height: 4),
           pw.Text(
-            '${report.patientName}  •  ${report.condition}  •  Trend: ${report.progressTrend}',
+            '${report.patientName}  |  ${report.condition}  |  Trend: ${report.progressTrend}',
             style: pw.TextStyle(fontSize: 10, color: _sub),
           ),
           pw.SizedBox(height: 12),
@@ -498,7 +499,7 @@ class ReportGenerator {
                       .toList(),
             ),
             // Data rows
-            ...report.sessions.asMap().entries.map((entry) {
+            ...report.sessions.take(20).toList().asMap().entries.map((entry) {
               final i = entry.key;
               final s = entry.value;
               final bg = i.isEven ? _white : _bg;
@@ -636,7 +637,7 @@ class ReportGenerator {
       children: [
         _sectionTitle('Therapist Feedback'),
         pw.SizedBox(height: 8),
-        ...report.therapistFeedback.take(5).map((f) {
+        ...report.therapistFeedback.take(3).map((f) {
           return pw.Padding(
             padding: const pw.EdgeInsets.only(bottom: 8),
             child: pw.Container(

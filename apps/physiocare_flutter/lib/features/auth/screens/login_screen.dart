@@ -81,6 +81,8 @@ class _LoginScreenState extends State<LoginScreen> {
           "alt_phone": meta["alt_phone"],
           "address": meta["address"],
           "assigned_therapist_id": meta["assigned_therapist_id"],
+          "clinic_address": meta["clinic_address"],
+          "experience_years": meta["experience_years"],
         });
       } else {
         // If profile exists but role is missing/wrong, fix it from metadata

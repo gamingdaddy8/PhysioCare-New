@@ -3,7 +3,8 @@ import 'unified_pose_utils.dart';
 
 class WebSquatLogic {
   int reps = 0;
-  bool _isDown = false;
+  bool _isLeftDown = false;
+  bool _isRightDown = false;
 
   final double downThreshold;
   final double upThreshold;
@@ -15,36 +16,60 @@ class WebSquatLogic {
 
   void reset() {
     reps = 0;
-    _isDown = false;
+    _isLeftDown = false;
+    _isRightDown = false;
   }
 
-  /// Uses LEFT leg only
-  /// hip=23, knee=25, ankle=27
   String? update(UnifiedPose pose) {
-    final hip = UnifiedPoseUtils.lm(pose, 23);
-    final knee = UnifiedPoseUtils.lm(pose, 25);
-    final ankle = UnifiedPoseUtils.lm(pose, 27);
+    String? msg;
+    bool repTriggered = false;
 
-    if (!UnifiedPoseUtils.visible(hip) ||
-        !UnifiedPoseUtils.visible(knee) ||
-        !UnifiedPoseUtils.visible(ankle)) {
-      return "Keep your left leg visible";
+    // Left Leg
+    final lhip = UnifiedPoseUtils.lm(pose, 23);
+    final lknee = UnifiedPoseUtils.lm(pose, 25);
+    final lankle = UnifiedPoseUtils.lm(pose, 27);
+
+    if (UnifiedPoseUtils.visible(lhip) && UnifiedPoseUtils.visible(lknee) && UnifiedPoseUtils.visible(lankle)) {
+      final angle = UnifiedPoseUtils.angleFrom3(lhip!, lknee!, lankle!);
+      if (!_isLeftDown && angle < downThreshold) {
+        _isLeftDown = true;
+        msg = "Good! Now stand up";
+      }
+      if (_isLeftDown && angle > upThreshold) {
+        repTriggered = true;
+        _isLeftDown = false;
+        msg = "Nice squat!";
+      }
+      if (!_isLeftDown && angle < 140 && msg == null) msg = "Go a bit lower";
     }
 
-    final angle = UnifiedPoseUtils.angleFrom3(hip!, knee!, ankle!);
+    // Right Leg
+    final rhip = UnifiedPoseUtils.lm(pose, 24);
+    final rknee = UnifiedPoseUtils.lm(pose, 26);
+    final rankle = UnifiedPoseUtils.lm(pose, 28);
 
-    if (!_isDown && angle < downThreshold) {
-      _isDown = true;
-      return "Good! Now stand up";
+    if (UnifiedPoseUtils.visible(rhip) && UnifiedPoseUtils.visible(rknee) && UnifiedPoseUtils.visible(rankle)) {
+      final angle = UnifiedPoseUtils.angleFrom3(rhip!, rknee!, rankle!);
+      if (!_isRightDown && angle < downThreshold) {
+        _isRightDown = true;
+        msg = "Good! Now stand up";
+      }
+      if (_isRightDown && angle > upThreshold) {
+        repTriggered = true;
+        _isRightDown = false;
+        msg = "Nice squat!";
+      }
+      if (!_isRightDown && angle < 140 && msg == null) msg = "Go a bit lower";
     }
 
-    if (_isDown && angle > upThreshold) {
-      reps += 1;
-      _isDown = false;
-      return "Nice squat!";
+    if (repTriggered) reps += 1;
+
+    if (msg == null && 
+       (!UnifiedPoseUtils.visible(lhip) || !UnifiedPoseUtils.visible(lknee) || !UnifiedPoseUtils.visible(lankle)) &&
+       (!UnifiedPoseUtils.visible(rhip) || !UnifiedPoseUtils.visible(rknee) || !UnifiedPoseUtils.visible(rankle))) {
+      return "Keep your legs visible";
     }
 
-    if (!_isDown && angle < 140) return "Go a bit lower";
-    return null;
+    return msg;
   }
 }
