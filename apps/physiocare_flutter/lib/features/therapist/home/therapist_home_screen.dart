@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../data/services/therapist_service.dart';
 import '../patient_details/therapist_patient_detail_screen.dart';
+import '../../appointments/screens/notifications_screen.dart';
 
 class TherapistHomeScreen extends StatefulWidget {
   const TherapistHomeScreen({super.key});
@@ -29,6 +30,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
   List<Map<String, dynamic>> _patients = [];
   int _pendingAlerts   = 0;
   int _totalSessions   = 0;
+  int _pendingBookings = 0;
 
   @override
   void initState() {
@@ -86,6 +88,13 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
       // 3) Pain alerts (pending only)
       final alerts = await _therapistService.fetchPainAlerts(user.id);
 
+      // Pending Bookings
+      final pendingBookingsRes = await _supabase
+          .from("appointments")
+          .select("id")
+          .eq("therapist_id", user.id)
+          .eq("status", "pending");
+
       // 4) Total sessions across all patients
       int totalSessions = 0;
       for (final p in patients) {
@@ -102,6 +111,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
         _patients      = patients;
         _pendingAlerts = alerts.length;
         _totalSessions = totalSessions;
+        _pendingBookings = (pendingBookingsRes as List).length;
         _loading       = false;
         _status        = "Loaded successfully ✅";
       });
@@ -132,6 +142,12 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: "Appointment Requests",
+            icon: const Icon(Icons.calendar_today, color: TherapistHomeScreen.kDark),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.therapistBookings),
+          ),
+          const NotificationBell(),
           IconButton(
             tooltip: "Refresh",
             onPressed: _loadTherapistAndPatients,
@@ -192,6 +208,11 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                               icon: Icons.people_alt_rounded,
                             ),
                             _MiniStatCard(
+                              title: "Pending Bookings",
+                              value: _pendingBookings.toString(),
+                              icon: Icons.pending_actions_rounded,
+                            ),
+                            _MiniStatCard(
                               title: "Pain Alerts",
                               value: _pendingAlerts.toString(),
                               icon: Icons.warning_rounded,
@@ -245,7 +266,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                                     width: 360,
                                     child: _PatientCard(
                                       name: p["full_name"] ?? "Patient",
-                                      condition: "Rehab",
+                                      condition: p["condition"] ?? "Rehab",
                                       onTap: () {
                                         Navigator.push(
                                           context,
@@ -255,6 +276,17 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                                               patientId: p["id"].toString(),
                                             ),
                                           ),
+                                        );
+                                      },
+                                      onReportTap: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          AppRoutes.therapistReport,
+                                          arguments: {
+                                            'patientId': p["id"].toString(),
+                                            'patientName':
+                                                p["full_name"] ?? "Patient",
+                                          },
                                         );
                                       },
                                     ),
@@ -270,7 +302,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: _PatientCard(
                                       name: p["full_name"] ?? "Patient",
-                                      condition: "Rehab",
+                                      condition: p["condition"] ?? "Rehab",
                                       onTap: () {
                                         Navigator.push(
                                           context,
@@ -280,6 +312,17 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                                               patientId: p["id"].toString(),
                                             ),
                                           ),
+                                        );
+                                      },
+                                      onReportTap: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          AppRoutes.therapistReport,
+                                          arguments: {
+                                            'patientId': p["id"].toString(),
+                                            'patientName':
+                                                p["full_name"] ?? "Patient",
+                                          },
                                         );
                                       },
                                     ),
@@ -444,11 +487,13 @@ class _PatientCard extends StatelessWidget {
   final String name;
   final String condition;
   final VoidCallback onTap;
+  final VoidCallback onReportTap; // ── NEW ──
 
   const _PatientCard({
     required this.name,
     required this.condition,
     required this.onTap,
+    required this.onReportTap,
   });
 
   @override
@@ -503,6 +548,15 @@ class _PatientCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+            // ── NEW: report icon button ──
+            IconButton(
+              tooltip: 'View Report',
+              onPressed: onReportTap,
+              icon: const Icon(
+                Icons.assessment_outlined,
+                color: TherapistHomeScreen.kPrimary,
               ),
             ),
             const Icon(Icons.chevron_right),

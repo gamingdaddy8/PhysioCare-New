@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/routes/app_routes.dart';
 
 class TherapistPatientDetailScreen extends StatefulWidget {
   final String patientId;
@@ -266,6 +267,17 @@ class _TherapistPatientDetailScreenState
     );
   }
 
+  void _navigateToReport() {
+    Navigator.pushNamed(
+      context,
+      AppRoutes.therapistReport,
+      arguments: {
+        'patientId':   widget.patientId,
+        'patientName': patientName,
+      },
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
@@ -288,6 +300,15 @@ class _TherapistPatientDetailScreenState
         iconTheme: const IconThemeData(
             color: TherapistPatientDetailScreen.kDark),
         actions: [
+          // ── NEW: Report shortcut in app bar ──
+          IconButton(
+            tooltip:  'View Full Report',
+            onPressed: _navigateToReport,
+            icon: const Icon(
+              Icons.assessment_outlined,
+              color: TherapistPatientDetailScreen.kPrimary,
+            ),
+          ),
           IconButton(
             tooltip:  'Refresh',
             onPressed: _loadAll,
@@ -324,6 +345,7 @@ class _TherapistPatientDetailScreenState
                             name: patientName, condition: condition),
                         const SizedBox(height: 18),
 
+                        // ── Stats row ──
                         Wrap(
                           spacing: 14,
                           runSpacing: 14,
@@ -346,8 +368,34 @@ class _TherapistPatientDetailScreenState
                           ],
                         ),
 
+                        const SizedBox(height: 14),
+
+                        // ── NEW: View Full Report button ──
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  TherapistPatientDetailScreen.kPrimary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            onPressed: _navigateToReport,
+                            icon: const Icon(Icons.assessment_outlined),
+                            label: const Text(
+                              'View Full Report & Analytics',
+                              style:
+                                  TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+
                         const SizedBox(height: 22),
 
+                        // ── Main content ──
                         if (isWeb)
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,

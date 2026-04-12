@@ -14,6 +14,11 @@ import '../../features/pose/pose_detector/camera_pose_screen.dart';
 import '../../features/pose/session/exercise_session_screen.dart';
 
 import '../../features/therapist/home/therapist_home_screen.dart';
+import '../../features/appointments/screens/book_appointment_screen.dart';
+import '../../features/appointments/screens/my_appointments_screen.dart';
+import '../../features/appointments/screens/therapist_bookings_screen.dart';
+import '../../features/appointments/screens/therapist_availability_screen.dart';
+import '../../features/appointments/screens/notifications_screen.dart';
 
 class AppRoutes {
   static const splash = "/";
@@ -36,6 +41,13 @@ class AppRoutes {
   // Reports
   static const patientReport = "/patient-report";
   static const therapistReport = "/therapist-report";
+
+  // Appointments
+  static const bookAppointment          = '/book-appointment';
+  static const myAppointments           = '/my-appointments';
+  static const therapistBookings        = '/therapist-bookings';
+  static const therapistAvailability    = '/therapist-availability';
+  static const notifications            = '/notifications';
 
   static Map<String, WidgetBuilder> routes = {
     // First screen
@@ -73,5 +85,12 @@ class AppRoutes {
         patientName: args['patientName'] ?? 'Patient',
       );
     },
+
+    // Appointments
+    bookAppointment:       (context) => const BookAppointmentScreen(),
+    myAppointments:        (context) => const MyAppointmentsScreen(),
+    therapistBookings:     (context) => const TherapistBookingsScreen(),
+    therapistAvailability: (context) => const TherapistAvailabilityScreen(),
+    notifications:         (context) => const NotificationsScreen(),
   };
 }

@@ -46,7 +46,7 @@ window.startMediapipePose = async function (videoId) {
       modelComplexity: 0,
       smoothLandmarks: true,
       enableSegmentation: false,
-      selfieMode: true,
+      selfieMode: false,
       minDetectionConfidence: 0.5,
       minTrackingConfidence: 0.5,
     });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../appointments/screens/notifications_screen.dart';
 
 class PatientPortalHomeScreen extends StatefulWidget {
   const PatientPortalHomeScreen({super.key});
@@ -207,6 +208,7 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         titleSpacing: 18,
         title: const _TopTitle(),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip: 'Refresh',
             onPressed: _loadData,
@@ -459,9 +461,9 @@ class _QuickActionsRow extends StatelessWidget {
           icon: Icons.description_outlined,
           route: AppRoutes.patientReport),
       _QuickActionCard(
-          title: 'Schedule',
-          icon: Icons.calendar_month_outlined,
-          route: AppRoutes.patientSchedule),
+          title: 'Appointments',
+          icon: Icons.calendar_month,
+          route: AppRoutes.myAppointments),
     ];
 
     if (isWide) {

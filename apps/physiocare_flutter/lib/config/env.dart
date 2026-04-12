@@ -6,5 +6,5 @@ class Env {
 
   // TODO: Replace with your Gemini API key
   // Get a free key from: https://aistudio.google.com → Get API Key
-  static const String geminiApiKey = "AIzaSyC99d8Ac6jwJ9CKmH0-KAyQiHtyYoTNE6g";
+  static const String geminiApiKey = "AIzaSyD34YuH6myQhvbiS4RNwlbyj3IItzX1lt0";
 }
