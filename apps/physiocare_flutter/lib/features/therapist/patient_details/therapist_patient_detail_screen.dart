@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/routes/app_routes.dart';
 
 class TherapistPatientDetailScreen extends StatefulWidget {
   final String patientId;
@@ -27,8 +27,9 @@ class _TherapistPatientDetailScreenState
   bool   _loading = true;
   String _status  = 'Loading...';
 
-  String  patientName  = 'Patient';
-  String  condition    = 'Rehab';
+  String  patientName      = 'Patient';
+  String  patientDisplayId = '';
+  String  condition        = 'Rehab';
   String? patientEmail;
   String? phone;
   String? altPhone;
@@ -62,7 +63,7 @@ class _TherapistPatientDetailScreenState
         _status  = 'Loading patient...';
       });
 
-      // 1) Patient profile
+      // 1) Patient profile — include display_id
       final patientProfile = await _supabase
           .from('profiles')
           .select()
@@ -70,12 +71,13 @@ class _TherapistPatientDetailScreenState
           .maybeSingle();
 
       if (patientProfile != null) {
-        patientName  = patientProfile['full_name'] ?? 'Patient';
-        condition    = patientProfile['condition']  ?? 'Rehab';
-        patientEmail = patientProfile['email'];
-        phone        = patientProfile['phone'];
-        altPhone     = patientProfile['alt_phone'];
-        address      = patientProfile['address'];
+        patientName      = patientProfile['full_name']  ?? 'Patient';
+        patientDisplayId = patientProfile['display_id'] ?? '';
+        condition        = patientProfile['condition']  ?? 'Rehab';
+        patientEmail     = patientProfile['email'];
+        phone            = patientProfile['phone'];
+        altPhone         = patientProfile['alt_phone'];
+        address          = patientProfile['address'];
       }
 
       // 2) Exercise master list
@@ -213,7 +215,8 @@ class _TherapistPatientDetailScreenState
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Exercise assigned successfully ✅')),
+      const SnackBar(
+          content: Text('Exercise assigned successfully ✅')),
     );
     setState(() {});
   }
@@ -257,24 +260,13 @@ class _TherapistPatientDetailScreenState
         onAssign: (exerciseId, reps, totalDays, sessionsPerDay) async {
           Navigator.pop(context);
           await _assignExercise(
-            exerciseId:      exerciseId,
-            reps:            reps,
-            totalDays:       totalDays,
-            sessionsPerDay:  sessionsPerDay,
+            exerciseId:     exerciseId,
+            reps:           reps,
+            totalDays:      totalDays,
+            sessionsPerDay: sessionsPerDay,
           );
         },
       ),
-    );
-  }
-
-  void _navigateToReport() {
-    Navigator.pushNamed(
-      context,
-      AppRoutes.therapistReport,
-      arguments: {
-        'patientId':   widget.patientId,
-        'patientName': patientName,
-      },
     );
   }
 
@@ -288,8 +280,8 @@ class _TherapistPatientDetailScreenState
     return Scaffold(
       backgroundColor: TherapistPatientDetailScreen.kBg,
       appBar: AppBar(
-        backgroundColor:   Colors.white,
-        surfaceTintColor:  Colors.white,
+        backgroundColor:  Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Patient Details',
@@ -300,15 +292,6 @@ class _TherapistPatientDetailScreenState
         iconTheme: const IconThemeData(
             color: TherapistPatientDetailScreen.kDark),
         actions: [
-          // ── NEW: Report shortcut in app bar ──
-          IconButton(
-            tooltip:  'View Full Report',
-            onPressed: _navigateToReport,
-            icon: const Icon(
-              Icons.assessment_outlined,
-              color: TherapistPatientDetailScreen.kPrimary,
-            ),
-          ),
           IconButton(
             tooltip:  'Refresh',
             onPressed: _loadAll,
@@ -329,7 +312,8 @@ class _TherapistPatientDetailScreenState
                     Text(_status,
                         style: const TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: TherapistPatientDetailScreen.kSub)),
+                            color:
+                                TherapistPatientDetailScreen.kSub)),
                   ],
                 ),
               )
@@ -337,15 +321,19 @@ class _TherapistPatientDetailScreenState
                 padding: const EdgeInsets.all(18),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1200),
+                    constraints:
+                        const BoxConstraints(maxWidth: 1200),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // ── Patient header with ID ────────────
                         _PatientHeaderCard(
-                            name: patientName, condition: condition),
+                          name:      patientName,
+                          displayId: patientDisplayId,
+                          condition: condition,
+                        ),
                         const SizedBox(height: 18),
 
-                        // ── Stats row ──
                         Wrap(
                           spacing: 14,
                           runSpacing: 14,
@@ -368,37 +356,12 @@ class _TherapistPatientDetailScreenState
                           ],
                         ),
 
-                        const SizedBox(height: 14),
-
-                        // ── NEW: View Full Report button ──
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  TherapistPatientDetailScreen.kPrimary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            onPressed: _navigateToReport,
-                            icon: const Icon(Icons.assessment_outlined),
-                            label: const Text(
-                              'View Full Report & Analytics',
-                              style:
-                                  TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                        ),
-
                         const SizedBox(height: 22),
 
-                        // ── Main content ──
                         if (isWeb)
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 flex: 6,
@@ -438,7 +401,8 @@ class _TherapistPatientDetailScreenState
                               onAdd:    _openAddExerciseDialog,
                             ),
                             const SizedBox(height: 18),
-                            _RecentSessionsCard(sessions: _sessionReports),
+                            _RecentSessionsCard(
+                                sessions: _sessionReports),
                             const SizedBox(height: 18),
                             _FeedbackCard(
                               feedbackList: _feedbackList,
@@ -456,7 +420,8 @@ class _TherapistPatientDetailScreenState
                         const SizedBox(height: 12),
                         Text(_status,
                             style: const TextStyle(
-                                color: TherapistPatientDetailScreen.kSub,
+                                color:
+                                    TherapistPatientDetailScreen.kSub,
                                 fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -472,8 +437,25 @@ class _TherapistPatientDetailScreenState
 
 class _PatientHeaderCard extends StatelessWidget {
   final String name;
+  final String displayId;
   final String condition;
-  const _PatientHeaderCard({required this.name, required this.condition});
+
+  const _PatientHeaderCard({
+    required this.name,
+    required this.displayId,
+    required this.condition,
+  });
+
+  void _copyId(BuildContext context) {
+    if (displayId.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: displayId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$displayId copied to clipboard'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -505,6 +487,41 @@ class _PatientHeaderCard extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                       fontSize: 20)),
               const SizedBox(height: 4),
+              // Display ID badge (tappable to copy)
+              if (displayId.isNotEmpty)
+                GestureDetector(
+                  onTap: () => _copyId(context),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.20),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.badge_outlined,
+                            color: Colors.white, size: 13),
+                        const SizedBox(width: 5),
+                        Text(
+                          displayId,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              letterSpacing: 1.0),
+                        ),
+                        const SizedBox(width: 5),
+                        const Icon(Icons.copy_outlined,
+                            color: Colors.white70, size: 11),
+                      ],
+                    ),
+                  ),
+                ),
               Text(condition,
                   style: const TextStyle(
                       color: Colors.white70,
@@ -513,18 +530,21 @@ class _PatientHeaderCard extends StatelessWidget {
           ),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.18),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(0.25)),
+            border: Border.all(
+                color: Colors.white.withOpacity(0.25)),
           ),
           child: const Row(children: [
             Icon(Icons.verified, color: Colors.white, size: 18),
             SizedBox(width: 8),
             Text('Active',
                 style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w900)),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900)),
           ]),
         ),
       ]),
@@ -533,8 +553,8 @@ class _PatientHeaderCard extends StatelessWidget {
 }
 
 class _MiniStatCard extends StatelessWidget {
-  final String  title;
-  final String  value;
+  final String   title;
+  final String   value;
   final IconData icon;
   const _MiniStatCard(
       {required this.title, required this.value, required this.icon});
@@ -548,7 +568,10 @@ class _MiniStatCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 4))
+          BoxShadow(
+              color: Colors.black12,
+              blurRadius: 12,
+              offset: Offset(0, 4))
         ],
       ),
       child: Row(children: [
@@ -556,10 +579,12 @@ class _MiniStatCard extends StatelessWidget {
           height: 46,
           width:  46,
           decoration: BoxDecoration(
-            color: TherapistPatientDetailScreen.kPrimary.withOpacity(0.12),
+            color: TherapistPatientDetailScreen.kPrimary
+                .withOpacity(0.12),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, color: TherapistPatientDetailScreen.kPrimary),
+          child: Icon(icon,
+              color: TherapistPatientDetailScreen.kPrimary),
         ),
         const SizedBox(width: 14),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -590,7 +615,8 @@ class _AssignedExercisesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ModernCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           const Expanded(
             child: Text('Assigned Exercises',
@@ -714,7 +740,8 @@ class _RecentSessionsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ModernCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Recent Sessions',
             style: TextStyle(
                 fontSize: 16,
@@ -740,8 +767,8 @@ class _RecentSessionsCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: TherapistPatientDetailScreen.kBg,
                   borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: Colors.black12.withOpacity(0.08)),
+                  border: Border.all(
+                      color: Colors.black12.withOpacity(0.08)),
                 ),
                 child: Row(children: [
                   const Icon(Icons.bar_chart_rounded,
@@ -755,13 +782,14 @@ class _RecentSessionsCard extends StatelessWidget {
                           Text(title,
                               style: const TextStyle(
                                   fontWeight: FontWeight.w900,
-                                  color:
-                                      TherapistPatientDetailScreen.kDark)),
+                                  color: TherapistPatientDetailScreen
+                                      .kDark)),
                           const SizedBox(height: 2),
                           Text('$reps reps  •  ${mins}m  •  $date',
                               style: const TextStyle(
                                   fontSize: 12,
-                                  color: TherapistPatientDetailScreen.kSub,
+                                  color:
+                                      TherapistPatientDetailScreen.kSub,
                                   fontWeight: FontWeight.w700)),
                         ]),
                   ),
@@ -776,8 +804,8 @@ class _RecentSessionsCard extends StatelessWidget {
 
 class _FeedbackCard extends StatelessWidget {
   final List<Map<String, dynamic>> feedbackList;
-  final TextEditingController       controller;
-  final VoidCallback                onSend;
+  final TextEditingController      controller;
+  final VoidCallback               onSend;
   const _FeedbackCard({
     required this.feedbackList,
     required this.controller,
@@ -797,7 +825,8 @@ class _FeedbackCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ModernCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Send Feedback',
             style: TextStyle(
                 fontSize: 16,
@@ -808,8 +837,8 @@ class _FeedbackCard extends StatelessWidget {
           controller: controller,
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: 'Write a message to your patient...',
-            filled: true,
+            hintText:  'Write a message to your patient...',
+            filled:    true,
             fillColor: TherapistPatientDetailScreen.kBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -856,24 +885,27 @@ class _FeedbackCard extends StatelessWidget {
                       children: [
                         const Icon(Icons.chat_bubble_outline,
                             size: 16,
-                            color: TherapistPatientDetailScreen.kPrimary),
+                            color:
+                                TherapistPatientDetailScreen.kPrimary),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
                                 Text(f['message'] ?? '',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700,
-                                        color:
-                                            TherapistPatientDetailScreen.kDark,
+                                        color: TherapistPatientDetailScreen
+                                            .kDark,
                                         fontSize: 13)),
                                 const SizedBox(height: 2),
-                                Text(_fmt(f['created_at']?.toString()),
+                                Text(
+                                    _fmt(f['created_at']?.toString()),
                                     style: const TextStyle(
                                         fontSize: 11,
-                                        color:
-                                            TherapistPatientDetailScreen.kSub)),
+                                        color: TherapistPatientDetailScreen
+                                            .kSub)),
                               ]),
                         ),
                       ]),
@@ -890,7 +922,9 @@ class _ContactCard extends StatelessWidget {
   final String? altPhone;
   final String? address;
   const _ContactCard(
-      {required this.phone, required this.altPhone, required this.address});
+      {required this.phone,
+      required this.altPhone,
+      required this.address});
 
   String _val(String? v) =>
       (v == null || v.trim().isEmpty) ? '-' : v;
@@ -898,7 +932,8 @@ class _ContactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ModernCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Emergency Contact',
             style: TextStyle(
                 fontSize: 16,
@@ -973,15 +1008,19 @@ class _AddExerciseDialog extends StatefulWidget {
       {required this.exercises, required this.onAssign});
 
   @override
-  State<_AddExerciseDialog> createState() => _AddExerciseDialogState();
+  State<_AddExerciseDialog> createState() =>
+      _AddExerciseDialogState();
 }
 
 class _AddExerciseDialogState extends State<_AddExerciseDialog> {
   String? selectedExerciseId;
 
-  final TextEditingController repsCtrl     = TextEditingController(text: '10');
-  final TextEditingController daysCtrl     = TextEditingController(text: '7');
-  final TextEditingController sessionsCtrl = TextEditingController(text: '1');
+  final TextEditingController repsCtrl =
+      TextEditingController(text: '10');
+  final TextEditingController daysCtrl =
+      TextEditingController(text: '7');
+  final TextEditingController sessionsCtrl =
+      TextEditingController(text: '1');
 
   @override
   void dispose() {
@@ -1000,18 +1039,22 @@ class _AddExerciseDialogState extends State<_AddExerciseDialog> {
   @override
   Widget build(BuildContext context) {
     if (widget.exercises.isNotEmpty && selectedExerciseId == null) {
-      selectedExerciseId = widget.exercises.first['id']?.toString();
+      selectedExerciseId =
+          widget.exercises.first['id']?.toString();
     }
 
     return AlertDialog(
       title: const Text('Assign Exercise',
           style: TextStyle(fontWeight: FontWeight.w900)),
       content: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child:
+            Column(mainAxisSize: MainAxisSize.min, children: [
           DropdownButtonFormField<String>(
             value: selectedExerciseId,
-            decoration: const InputDecoration(labelText: 'Exercise'),
-            items: widget.exercises.map<DropdownMenuItem<String>>((e) {
+            decoration:
+                const InputDecoration(labelText: 'Exercise'),
+            items: widget.exercises
+                .map<DropdownMenuItem<String>>((e) {
               final id    = e['id']?.toString() ?? '';
               final title = e['title']?.toString() ?? 'Exercise';
               return DropdownMenuItem<String>(
@@ -1027,21 +1070,24 @@ class _AddExerciseDialogState extends State<_AddExerciseDialog> {
             controller: daysCtrl,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-                labelText: 'Total Days', hintText: 'Example: 14'),
+                labelText: 'Total Days',
+                hintText: 'Example: 14'),
           ),
           const SizedBox(height: 14),
           TextField(
             controller: sessionsCtrl,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-                labelText: 'Sessions Per Day', hintText: 'Example: 2'),
+                labelText: 'Sessions Per Day',
+                hintText: 'Example: 2'),
           ),
           const SizedBox(height: 14),
           TextField(
             controller: repsCtrl,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-                labelText: 'Reps Per Session', hintText: 'Example: 10'),
+                labelText: 'Reps Per Session',
+                hintText: 'Example: 10'),
           ),
         ]),
       ),
@@ -1052,7 +1098,8 @@ class _AddExerciseDialogState extends State<_AddExerciseDialog> {
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: TherapistPatientDetailScreen.kPrimary,
+            backgroundColor:
+                TherapistPatientDetailScreen.kPrimary,
             foregroundColor: Colors.white,
           ),
           onPressed: () {

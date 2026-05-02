@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
-import '../../appointments/screens/notifications_screen.dart';
 
 class PatientPortalHomeScreen extends StatefulWidget {
   const PatientPortalHomeScreen({super.key});
@@ -12,15 +12,19 @@ class PatientPortalHomeScreen extends StatefulWidget {
 }
 
 class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
-  static const Color kPrimary = Color(0xFF1FC7B6);
-  static const Color kBg = Color(0xFFF8FAFC);
+  static const Color kPrimary  = Color(0xFF1FC7B6);
+  static const Color kBg       = Color(0xFFF8FAFC);
   static const Color kTextDark = Color(0xFF0F172A);
-  static const Color kSub = Color(0xFF64748B);
+  static const Color kSub      = Color(0xFF64748B);
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
   bool _loading = true;
-  String _patientName = "there";
+  String _patientName      = 'there';
+  String _patientDisplayId = '';
+  String _therapistName    = '';
+  String _therapistDisplayId = '';
+
   List<Map<String, dynamic>> _assignedExercises = [];
   int _completedToday = 0;
 
@@ -39,15 +43,30 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
       // 1) Fetch patient profile
       final profile = await _supabase
           .from('profiles')
-          .select()
+          .select('full_name, display_id, assigned_therapist_id')
           .eq('id', user.id)
           .maybeSingle();
 
       if (profile != null) {
-        _patientName = profile['full_name'] ?? 'there';
+        _patientName      = profile['full_name']  ?? 'there';
+        _patientDisplayId = profile['display_id'] ?? '';
+
+        // 2) Fetch assigned therapist's name + display_id
+        final therapistId = profile['assigned_therapist_id']?.toString();
+        if (therapistId != null && therapistId.isNotEmpty) {
+          final therapist = await _supabase
+              .from('profiles')
+              .select('full_name, display_id')
+              .eq('id', therapistId)
+              .maybeSingle();
+          if (therapist != null) {
+            _therapistName      = therapist['full_name']  ?? '';
+            _therapistDisplayId = therapist['display_id'] ?? '';
+          }
+        }
       }
 
-      // 2) Fetch assigned exercises (active ones)
+      // 3) Fetch assigned exercises (active ones)
       final assigned = await _supabase
           .from('assigned_exercises')
           .select('''
@@ -66,8 +85,8 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
 
       _assignedExercises = List<Map<String, dynamic>>.from(assigned);
 
-      // 3) Count sessions completed today
-      final today = DateTime.now();
+      // 4) Count sessions completed today
+      final today    = DateTime.now();
       final todayStr =
           '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
@@ -92,16 +111,17 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
       if (user == null) return;
 
       await _supabase.from('pain_reports').insert({
-        'patient_id': user.id,
-        'pain_level': level,
+        'patient_id':  user.id,
+        'pain_level':  level,
         'description': note,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at':  DateTime.now().toIso8601String(),
       });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Pain report submitted. Your therapist has been notified.'),
+          content: Text(
+              'Pain report submitted. Your therapist has been notified.'),
           backgroundColor: Color(0xFF1FC7B6),
         ),
       );
@@ -121,10 +141,8 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text(
-            'Report Pain',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
+          title: const Text('Report Pain',
+              style: TextStyle(fontWeight: FontWeight.w900)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,27 +150,23 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
               const Text('Pain level (1 = mild, 10 = severe)',
                   style: TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Slider(
-                      value: selectedLevel.toDouble(),
-                      min: 1,
-                      max: 10,
-                      divisions: 9,
-                      activeColor: const Color(0xFFE53935),
-                      label: selectedLevel.toString(),
-                      onChanged: (v) =>
-                          setDialogState(() => selectedLevel = v.round()),
-                    ),
+              Row(children: [
+                Expanded(
+                  child: Slider(
+                    value: selectedLevel.toDouble(),
+                    min: 1,
+                    max: 10,
+                    divisions: 9,
+                    activeColor: const Color(0xFFE53935),
+                    label: selectedLevel.toString(),
+                    onChanged: (v) =>
+                        setDialogState(() => selectedLevel = v.round()),
                   ),
-                  Text(
-                    '$selectedLevel',
+                ),
+                Text('$selectedLevel',
                     style: const TextStyle(
-                        fontWeight: FontWeight.w900, fontSize: 18),
-                  ),
-                ],
-              ),
+                        fontWeight: FontWeight.w900, fontSize: 18)),
+              ]),
               const SizedBox(height: 14),
               TextField(
                 controller: noteCtrl,
@@ -196,7 +210,7 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
+    final w      = MediaQuery.of(context).size.width;
     final isWide = w >= 900;
 
     return Scaffold(
@@ -208,14 +222,13 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         titleSpacing: 18,
         title: const _TopTitle(),
         actions: [
-          const NotificationBell(),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip:  'Refresh',
             onPressed: _loadData,
             icon: const Icon(Icons.refresh, color: Color(0xFF0F172A)),
           ),
           IconButton(
-            tooltip: 'Logout',
+            tooltip:  'Logout',
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: Color(0xFF0F172A)),
           ),
@@ -237,47 +250,53 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _Greeting(name: _patientName),
+                        const SizedBox(height: 14),
+
+                        // ── ID Cards row ──────────────────────────
+                        _IdCardsRow(
+                          patientDisplayId:   _patientDisplayId,
+                          therapistName:      _therapistName,
+                          therapistDisplayId: _therapistDisplayId,
+                          isWide: isWide,
+                        ),
                         const SizedBox(height: 18),
 
                         _TodaySessionCard(
-                          isWide: isWide,
+                          isWide:         isWide,
                           completedToday: _completedToday,
-                          assignedCount: _assignedExercises.length,
+                          assignedCount:  _assignedExercises.length,
                         ),
                         const SizedBox(height: 18),
 
                         _QuickActionsRow(isWide: isWide),
                         const SizedBox(height: 18),
 
-                        Row(
-                          children: [
-                            const Text(
-                              'Your Exercises',
-                              style: TextStyle(
+                        Row(children: [
+                          const Text(
+                            'Your Exercises',
+                            style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
-                                color: kTextDark,
-                              ),
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => Navigator.pushNamed(
-                                  context, AppRoutes.patientExercises),
-                              icon: const Icon(Icons.chevron_right),
-                              label: const Text('View All'),
-                            ),
-                          ],
-                        ),
+                                color: kTextDark),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: () => Navigator.pushNamed(
+                                context, AppRoutes.patientExercises),
+                            icon:  const Icon(Icons.chevron_right),
+                            label: const Text('View All'),
+                          ),
+                        ]),
                         const SizedBox(height: 10),
 
                         _assignedExercises.isEmpty
                             ? _EmptyExercisesCard(
-                                isWide: isWide,
+                                isWide:       isWide,
                                 onReportPain: _showPainDialog,
                               )
                             : _ExercisesList(
-                                exercises: _assignedExercises,
-                                isWide: isWide,
+                                exercises:    _assignedExercises,
+                                isWide:       isWide,
                                 onReportPain: _showPainDialog,
                               ),
                       ],
@@ -290,8 +309,142 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
   }
 }
 
+// ── ID Cards Row ──────────────────────────────────────────────────────────────
+
+class _IdCardsRow extends StatelessWidget {
+  final String patientDisplayId;
+  final String therapistName;
+  final String therapistDisplayId;
+  final bool   isWide;
+
+  const _IdCardsRow({
+    required this.patientDisplayId,
+    required this.therapistName,
+    required this.therapistDisplayId,
+    required this.isWide,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final myCard = _IdBadgeCard(
+      label:    'Your Patient ID',
+      displayId: patientDisplayId.isEmpty ? '—' : patientDisplayId,
+      icon:     Icons.badge_outlined,
+      color:    const Color(0xFF1FC7B6),
+    );
+
+    final therapistCard = _IdBadgeCard(
+      label:    therapistName.isEmpty
+                  ? 'No Therapist Assigned'
+                  : 'Therapist: $therapistName',
+      displayId: therapistDisplayId.isEmpty ? '—' : therapistDisplayId,
+      icon:     Icons.medical_services_outlined,
+      color:    const Color(0xFF6366F1),
+    );
+
+    if (isWide) {
+      return Row(children: [
+        Expanded(child: myCard),
+        const SizedBox(width: 14),
+        Expanded(child: therapistCard),
+      ]);
+    }
+
+    return Column(children: [
+      myCard,
+      const SizedBox(height: 12),
+      therapistCard,
+    ]);
+  }
+}
+
+class _IdBadgeCard extends StatelessWidget {
+  final String  label;
+  final String  displayId;
+  final IconData icon;
+  final Color   color;
+
+  const _IdBadgeCard({
+    required this.label,
+    required this.displayId,
+    required this.icon,
+    required this.color,
+  });
+
+  void _copyId(BuildContext context) {
+    if (displayId == '—') return;
+    Clipboard.setData(ClipboardData(text: displayId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$displayId copied to clipboard'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+              color: color.withOpacity(0.07),
+              blurRadius: 12,
+              offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(children: [
+        Container(
+          height: 44,
+          width:  44,
+          decoration: BoxDecoration(
+            color:        color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                displayId,
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    letterSpacing: 1.2),
+              ),
+            ],
+          ),
+        ),
+        // Copy button
+        if (displayId != '—')
+          IconButton(
+            tooltip:  'Copy ID',
+            onPressed: () => _copyId(context),
+            icon: Icon(Icons.copy_outlined, size: 18, color: color),
+          ),
+      ]),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Sub-widgets
+// Unchanged sub-widgets below (kept exactly as before)
 // ---------------------------------------------------------------------------
 
 class _TopTitle extends StatelessWidget {
@@ -299,33 +452,26 @@ class _TopTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: Color(0xFF1FC7B6),
-          child: Icon(Icons.monitor_heart, color: Colors.white, size: 18),
-        ),
-        SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'PhysioCare',
+    return const Row(children: [
+      CircleAvatar(
+        radius: 18,
+        backgroundColor: Color(0xFF1FC7B6),
+        child: Icon(Icons.monitor_heart, color: Colors.white, size: 18),
+      ),
+      SizedBox(width: 12),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('PhysioCare',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            Text(
-              'Patient Portal',
-              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-            ),
-          ],
-        ),
-      ],
-    );
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A))),
+          Text('Patient Portal',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+        ],
+      ),
+    ]);
   }
 }
 
@@ -341,10 +487,9 @@ class _Greeting extends StatelessWidget {
         Text(
           'Hello, $name!',
           style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF0F172A),
-          ),
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF0F172A)),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -358,8 +503,8 @@ class _Greeting extends StatelessWidget {
 
 class _TodaySessionCard extends StatelessWidget {
   final bool isWide;
-  final int completedToday;
-  final int assignedCount;
+  final int  completedToday;
+  final int  assignedCount;
 
   const _TodaySessionCard({
     required this.isWide,
@@ -375,8 +520,7 @@ class _TodaySessionCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         gradient: const LinearGradient(
-          colors: [Color(0xFF1FC7B6), Color(0xFF21C6D6)],
-        ),
+            colors: [Color(0xFF1FC7B6), Color(0xFF21C6D6)]),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -385,27 +529,22 @@ class _TodaySessionCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Today's Sessions",
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700),
-                ),
+                const Text("Today's Sessions",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
-                Text(
-                  '$completedToday completed',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w900),
-                ),
+                Text('$completedToday completed',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 Text(
-                  '$assignedCount exercise${assignedCount == 1 ? '' : 's'} assigned to you',
-                  style: TextStyle(
-                      color: Colors.white.withOpacity(0.95), fontSize: 14),
-                ),
+                    '$assignedCount exercise${assignedCount == 1 ? '' : 's'} assigned to you',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.95), fontSize: 14)),
                 const SizedBox(height: 14),
                 SizedBox(
                   height: 44,
@@ -420,7 +559,7 @@ class _TodaySessionCard extends StatelessWidget {
                         ? null
                         : () => Navigator.pushNamed(
                             context, AppRoutes.exerciseSession),
-                    icon: const Icon(Icons.play_arrow),
+                    icon:  const Icon(Icons.play_arrow),
                     label: const Text('Start Session',
                         style: TextStyle(fontWeight: FontWeight.w900)),
                   ),
@@ -431,13 +570,13 @@ class _TodaySessionCard extends StatelessWidget {
           const SizedBox(width: 16),
           Container(
             height: 62,
-            width: 62,
+            width:  62,
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.22),
               shape: BoxShape.circle,
             ),
-            child:
-                const Icon(Icons.trending_up, color: Colors.white, size: 28),
+            child: const Icon(Icons.trending_up,
+                color: Colors.white, size: 28),
           ),
         ],
       ),
@@ -454,30 +593,27 @@ class _QuickActionsRow extends StatelessWidget {
     const cards = [
       _QuickActionCard(
           title: 'Exercises',
-          icon: Icons.play_arrow,
+          icon:  Icons.play_arrow,
           route: AppRoutes.patientExercises),
       _QuickActionCard(
           title: 'Reports',
-          icon: Icons.description_outlined,
+          icon:  Icons.description_outlined,
           route: AppRoutes.patientReport),
       _QuickActionCard(
-          title: 'Appointments',
-          icon: Icons.calendar_month,
-          route: AppRoutes.myAppointments),
+          title: 'Schedule',
+          icon:  Icons.calendar_month_outlined,
+          route: AppRoutes.patientSchedule),
     ];
 
     if (isWide) {
-      return Row(
-        children: [
-          Expanded(child: cards[0]),
-          const SizedBox(width: 14),
-          Expanded(child: cards[1]),
-          const SizedBox(width: 14),
-          Expanded(child: cards[2]),
-        ],
-      );
+      return Row(children: [
+        Expanded(child: cards[0]),
+        const SizedBox(width: 14),
+        Expanded(child: cards[1]),
+        const SizedBox(width: 14),
+        Expanded(child: cards[2]),
+      ]);
     }
-
     return Column(children: [
       cards[0],
       const SizedBox(height: 12),
@@ -489,9 +625,9 @@ class _QuickActionsRow extends StatelessWidget {
 }
 
 class _QuickActionCard extends StatelessWidget {
-  final String title;
+  final String  title;
   final IconData icon;
-  final String route;
+  final String  route;
 
   const _QuickActionCard({
     required this.title,
@@ -513,27 +649,24 @@ class _QuickActionCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.black12),
           ),
-          child: Row(
-            children: [
-              Icon(icon, color: const Color(0xFF1FC7B6)),
-              const SizedBox(width: 12),
-              Text(title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A))),
-              const Spacer(),
-            ],
-          ),
+          child: Row(children: [
+            Icon(icon, color: const Color(0xFF1FC7B6)),
+            const SizedBox(width: 12),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A))),
+            const Spacer(),
+          ]),
         ),
       ),
     );
   }
 }
 
-// Shows real assigned exercises from Supabase
 class _ExercisesList extends StatelessWidget {
   final List<Map<String, dynamic>> exercises;
-  final bool isWide;
+  final bool       isWide;
   final VoidCallback onReportPain;
 
   const _ExercisesList({
@@ -544,45 +677,43 @@ class _ExercisesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ...exercises.map((ex) {
-          final title = ex['exercises']?['title'] ?? 'Exercise';
-          final reps = ex['reps'] ?? 0;
-          final exerciseId = ex['exercises']?['id']?.toString() ?? '';
-          final assignedId = ex['id']?.toString() ?? '';
+    return Column(children: [
+      ...exercises.map((ex) {
+        final title      = ex['exercises']?['title'] ?? 'Exercise';
+        final reps       = ex['reps'] ?? 0;
+        final exerciseId = ex['exercises']?['id']?.toString() ?? '';
+        final assignedId = ex['id']?.toString() ?? '';
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _ExerciseCard(
-              title: title,
-              reps: reps,
-              onStart: () => Navigator.pushNamed(
-                context,
-                AppRoutes.exerciseSession,
-                arguments: {
-                  'assigned_exercise_id': assignedId,
-                  'exercise_id': exerciseId,
-                  'title': title,
-                  'reps': reps,
-                },
-              ),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _ExerciseCard(
+            title: title,
+            reps:  reps,
+            onStart: () => Navigator.pushNamed(
+              context,
+              AppRoutes.exerciseSession,
+              arguments: {
+                'assigned_exercise_id': assignedId,
+                'exercise_id':          exerciseId,
+                'title':                title,
+                'reps':                 reps,
+              },
             ),
-          );
-        }),
-        const SizedBox(height: 4),
-        SizedBox(
-          width: double.infinity,
-          child: _ReportPainButton(onPressed: onReportPain),
-        ),
-      ],
-    );
+          ),
+        );
+      }),
+      const SizedBox(height: 4),
+      SizedBox(
+        width: double.infinity,
+        child: _ReportPainButton(onPressed: onReportPain),
+      ),
+    ]);
   }
 }
 
 class _ExerciseCard extends StatelessWidget {
-  final String title;
-  final int reps;
+  final String     title;
+  final int        reps;
   final VoidCallback onStart;
 
   const _ExerciseCard({
@@ -600,52 +731,51 @@ class _ExerciseCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black12),
       ),
-      child: Row(
-        children: [
-          Container(
-            height: 46,
-            width: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1FC7B6).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.fitness_center, color: Color(0xFF1FC7B6)),
+      child: Row(children: [
+        Container(
+          height: 46,
+          width:  46,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1FC7B6).withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A))),
-                const SizedBox(height: 4),
-                Text('$reps reps',
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF64748B))),
-              ],
-            ),
+          child: const Icon(Icons.fitness_center,
+              color: Color(0xFF1FC7B6)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A))),
+              const SizedBox(height: 4),
+              Text('$reps reps',
+                  style: const TextStyle(
+                      fontSize: 13, color: Color(0xFF64748B))),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1FC7B6),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: onStart,
-            child: const Text('Start',
-                style: TextStyle(fontWeight: FontWeight.w900)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1FC7B6),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
           ),
-        ],
-      ),
+          onPressed: onStart,
+          child: const Text('Start',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+        ),
+      ]),
     );
   }
 }
 
 class _EmptyExercisesCard extends StatelessWidget {
-  final bool isWide;
+  final bool       isWide;
   final VoidCallback onReportPain;
 
   const _EmptyExercisesCard({
@@ -664,13 +794,11 @@ class _EmptyExercisesCard extends StatelessWidget {
         border: Border.all(color: Colors.black12),
       ),
       child: isWide
-          ? Row(
-              children: [
-                const Expanded(child: _EmptyText()),
-                const SizedBox(width: 18),
-                _ReportPainButton(onPressed: onReportPain),
-              ],
-            )
+          ? Row(children: [
+              const Expanded(child: _EmptyText()),
+              const SizedBox(width: 18),
+              _ReportPainButton(onPressed: onReportPain),
+            ])
           : Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -690,26 +818,22 @@ class _EmptyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        Icon(Icons.monitor_heart_outlined,
-            size: 40, color: Color(0xFF64748B)),
-        SizedBox(height: 10),
-        Text(
-          'No exercises assigned yet',
+    return const Column(children: [
+      Icon(Icons.monitor_heart_outlined,
+          size: 40, color: Color(0xFF64748B)),
+      SizedBox(height: 10),
+      Text('No exercises assigned yet',
           style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A)),
-        ),
-        SizedBox(height: 6),
-        Text(
-          'Your physiotherapist will assign exercises for your recovery plan.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-        ),
-      ],
-    );
+              color: Color(0xFF0F172A))),
+      SizedBox(height: 6),
+      Text(
+        'Your physiotherapist will assign exercises for your recovery plan.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+      ),
+    ]);
   }
 }
 
@@ -724,11 +848,11 @@ class _ReportPainButton extends StatelessWidget {
         backgroundColor: const Color(0xFFE53935),
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(40)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(40)),
       ),
       onPressed: onPressed,
-      icon: const Icon(Icons.error_outline),
+      icon:  const Icon(Icons.error_outline),
       label: const Text('Report Pain',
           style: TextStyle(fontWeight: FontWeight.w900)),
     );

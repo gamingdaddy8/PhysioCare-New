@@ -154,32 +154,39 @@ class TherapistService {
 
   // ── Pain alerts ──────────────────────────────────────────────
 
-  /// Fetch pending pain alerts from all patients of this therapist.
+  /// Fetch active pain alerts from all patients of this therapist.
   Future<List<Map<String, dynamic>>> fetchPainAlerts(
       String therapistId) async {
     final rows = await _supabase
-        .from('pain_reports')
+        .from('pain_alerts')
         .select('''
           id,
           pain_level,
-          description,
+          message,
+          exercise_title,
+          session_duration_at_alert,
+          re_triggered,
           status,
           created_at,
-          patient_id
+          patient_id,
+          patient_name
         ''')
         .eq('therapist_id', therapistId)
-        .eq('status', 'pending')
+        .eq('status', 'active')
         .order('created_at', ascending: false);
 
     return List<Map<String, dynamic>>.from(rows);
   }
 
   /// Mark a pain alert as reviewed.
-  Future<void> markPainAlertReviewed(String reportId) async {
+  Future<void> markPainAlertReviewed(String alertId) async {
     await _supabase
-        .from('pain_reports')
-        .update({'status': 'reviewed'})
-        .eq('id', reportId);
+        .from('pain_alerts')
+        .update({
+          'status': 'reviewed',
+          'reviewed_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', alertId);
   }
 
   // ── Stats ────────────────────────────────────────────────────

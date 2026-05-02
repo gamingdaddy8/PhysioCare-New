@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/audio_feedback_service.dart';
+import '../../../data/services/pain_alert_service.dart';
 import '../pose_detector/camera_pose_view.dart';
 import '../pose_detector/exercise_type.dart';
 import '../pose_detector/web_pose_view_stub.dart'
@@ -41,6 +43,14 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
   bool _argumentsLoaded = false;
 
+  // Pain alert state
+  bool _alertSent     = false;
+  bool _sessionPaused = false;
+  String _therapistId   = '';
+  String _therapistName = 'your therapist';
+  String _patientName   = 'Patient';
+  bool _endedByPainAlert = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -60,6 +70,48 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
     _stopwatch.start();
     AudioFeedbackService.instance.init();
+    _loadSessionContext();
+  }
+
+  /// Load therapist and patient info for pain alert context.
+  Future<void> _loadSessionContext() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      // Patient profile
+      final profile = await _supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (profile != null) {
+        _patientName = profile['full_name']?.toString() ?? 'Patient';
+      }
+
+      // Therapist from assigned exercise
+      if (_assignedExerciseId.isNotEmpty) {
+        final assigned = await _supabase
+            .from('assigned_exercises')
+            .select('therapist_id')
+            .eq('id', _assignedExerciseId)
+            .maybeSingle();
+        final tId = assigned?['therapist_id']?.toString() ?? '';
+        if (tId.isNotEmpty) {
+          _therapistId = tId;
+          final tp = await _supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', tId)
+              .maybeSingle();
+          if (tp != null) {
+            _therapistName = tp['full_name']?.toString() ?? 'your therapist';
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load session context: $e');
+    }
   }
 
   @override
@@ -115,9 +167,9 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) throw Exception('Not logged in');
 
-      // Fetch therapist_id from assigned_exercises for this record
-      String? therapistId;
-      if (_assignedExerciseId.isNotEmpty) {
+      // Use cached therapist ID if available, else fetch
+      String? therapistId = _therapistId.isNotEmpty ? _therapistId : null;
+      if (therapistId == null && _assignedExerciseId.isNotEmpty) {
         final assigned = await _supabase
             .from('assigned_exercises')
             .select('therapist_id')
@@ -128,15 +180,16 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
 
       // Save session report
       await _supabase.from('session_reports').insert({
-        'patient_id':       user.id,
-        'therapist_id':     therapistId,
-        'exercise_id':      _exerciseId.isNotEmpty ? _exerciseId : null,
-        'exercise_title':   _exerciseTitle,
-        'reps_done':        _currentRep,
-        'duration_seconds': durationSeconds,
-        'accuracy':         _liveAccuracy,
-        'notes':            null,
-        'created_at':       DateTime.now().toIso8601String(),
+        'patient_id':           user.id,
+        'therapist_id':         therapistId,
+        'exercise_id':          _exerciseId.isNotEmpty ? _exerciseId : null,
+        'exercise_title':       _exerciseTitle,
+        'reps_done':            _currentRep,
+        'duration_seconds':     durationSeconds,
+        'accuracy':             _liveAccuracy,
+        'notes':                null,
+        'ended_by_pain_alert':  _endedByPainAlert,
+        'created_at':           DateTime.now().toIso8601String(),
       });
 
       if (!mounted) return;
@@ -146,9 +199,10 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) => _SessionCompleteDialog(
-          exerciseTitle:   _exerciseTitle,
-          reps:            _currentRep,
-          durationSeconds: durationSeconds,
+          exerciseTitle:     _exerciseTitle,
+          reps:              _currentRep,
+          durationSeconds:   durationSeconds,
+          endedByPainAlert:  _endedByPainAlert,
           onDone: () {
             Navigator.of(context).pop(); // close dialog
             Navigator.of(context).pop(); // go back to exercises
@@ -196,6 +250,92 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
     }
   }
 
+  // ── Pain alert methods ──────────────────────────────────────────
+
+  void _showPainAlertDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _PainAlertDialog(
+        onSend: (painLevel, message) {
+          Navigator.of(ctx).pop();
+          _submitPainAlert(painLevel, message);
+        },
+        onCancel: () => Navigator.of(ctx).pop(),
+      ),
+    );
+  }
+
+  Future<void> _submitPainAlert(int painLevel, String? message) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    setState(() {
+      _alertSent = true;
+      _sessionPaused = true;
+      _endedByPainAlert = true;
+    });
+    _stopwatch.stop();
+
+    final alertId = await PainAlertService().submitPainAlert(
+      patientId:             user.id,
+      therapistId:           _therapistId,
+      exerciseTitle:         _exerciseTitle,
+      painLevel:             painLevel,
+      patientName:           _patientName,
+      message:               message,
+      sessionDurationSeconds: _stopwatch.elapsed.inSeconds,
+    );
+
+    if (!mounted) return;
+
+    // Show feedback even if queued for retry
+    if (alertId == null && PainAlertService().hasPendingAlert) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alert is being sent — please stay safe.'),
+          backgroundColor: Color(0xFFE53935),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  void _resumeSession() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Resume Session?',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+        content: const Text(
+          'We recommend checking with your therapist before continuing.\n\n'
+          'Are you sure you want to resume?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Stay Paused'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kPrimary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() => _sessionPaused = false);
+              _stopwatch.start();
+            },
+            child: const Text('Resume',
+                style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Build ────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final w      = MediaQuery.of(context).size.width;
@@ -221,8 +361,14 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
             ),
             const SizedBox(height: 2),
             Text(
-              'Rep $_currentRep of $_targetReps',
-              style: const TextStyle(fontSize: 12, color: kSub),
+              _sessionPaused
+                  ? '⏸ Session Paused'
+                  : 'Rep $_currentRep of $_targetReps',
+              style: TextStyle(
+                fontSize: 12,
+                color: _sessionPaused ? Colors.red : kSub,
+                fontWeight: _sessionPaused ? FontWeight.w700 : FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -252,15 +398,30 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
         ],
       ),
 
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: isWide ? _wideLayout() : _mobileBlocked(),
+      body: Column(
+        children: [
+          // ── Alert banner ──
+          if (_alertSent)
+            _PainAlertBanner(
+              therapistName: _therapistName,
+              onEndSession: _finishSession,
+              onResume: _sessionPaused ? _resumeSession : null,
+            ),
+
+          // ── Main content ──
+          Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: isWide ? _wideLayout() : _mobileBlocked(),
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
 
       bottomNavigationBar: Container(
@@ -279,21 +440,18 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
             ),
             const SizedBox(width: 16),
             _CircleButton(
+              bg: const Color(0xFFDC2626),
+              icon: Icons.warning_rounded,
+              tooltip: 'Pain Alert',
+              onTap: _showPainAlertDialog,
+            ),
+            const SizedBox(width: 16),
+            _CircleButton(
               bg: Colors.white,
               icon: Icons.check_circle_outline,
               iconColor: kPrimary,
               border: true,
               onTap: _finishSession,
-            ),
-            const SizedBox(width: 16),
-            _CircleButton(
-              bg: Colors.white,
-              icon: Icons.chat_bubble_outline,
-              iconColor: kTextDark,
-              border: true,
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chat with therapist — coming soon')),
-              ),
             ),
           ],
         ),
@@ -468,12 +626,14 @@ class _SessionCompleteDialog extends StatelessWidget {
   final String exerciseTitle;
   final int reps;
   final int durationSeconds;
+  final bool endedByPainAlert;
   final VoidCallback onDone;
 
   const _SessionCompleteDialog({
     required this.exerciseTitle,
     required this.reps,
     required this.durationSeconds,
+    this.endedByPainAlert = false,
     required this.onDone,
   });
 
@@ -486,6 +646,10 @@ class _SessionCompleteDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = endedByPainAlert
+        ? const Color(0xFFE53935)
+        : const Color(0xFF1FC7B6);
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       content: Column(
@@ -495,19 +659,44 @@ class _SessionCompleteDialog extends StatelessWidget {
             height: 70,
             width: 70,
             decoration: BoxDecoration(
-              color: const Color(0xFF1FC7B6).withValues(alpha: 0.12),
+              color: iconColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle,
-                color: Color(0xFF1FC7B6), size: 40),
+            child: Icon(
+              endedByPainAlert ? Icons.warning_rounded : Icons.check_circle,
+              color: iconColor,
+              size: 40,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text('Session Complete! 🎉',
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(
+            endedByPainAlert ? 'Session Ended' : 'Session Complete! 🎉',
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 6),
           Text(exerciseTitle,
               style: const TextStyle(color: Color(0xFF64748B))),
+          if (endedByPainAlert) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE53935).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Session was interrupted due to a pain alert.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFE53935),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -627,6 +816,7 @@ class _CircleButton extends StatelessWidget {
   final IconData icon;
   final Color    iconColor;
   final bool     border;
+  final String?  tooltip;
   final VoidCallback onTap;
 
   const _CircleButton({
@@ -634,12 +824,13 @@ class _CircleButton extends StatelessWidget {
     required this.icon,
     this.iconColor = Colors.white,
     this.border    = false,
+    this.tooltip,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    Widget btn = Material(
       color: bg,
       shape: const CircleBorder(),
       child: InkWell(
@@ -653,6 +844,310 @@ class _CircleButton extends StatelessWidget {
             border: border ? Border.all(color: Colors.black12) : null,
           ),
           child: Icon(icon, color: iconColor, size: 28),
+        ),
+      ),
+    );
+
+    if (tooltip != null) {
+      btn = Tooltip(message: tooltip!, child: btn);
+    }
+    return btn;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pain Alert Confirmation Dialog
+// ---------------------------------------------------------------------------
+
+class _PainAlertDialog extends StatefulWidget {
+  final void Function(int painLevel, String? message) onSend;
+  final VoidCallback onCancel;
+
+  const _PainAlertDialog({
+    required this.onSend,
+    required this.onCancel,
+  });
+
+  @override
+  State<_PainAlertDialog> createState() => _PainAlertDialogState();
+}
+
+class _PainAlertDialogState extends State<_PainAlertDialog> {
+  int _painLevel = 7;
+  final TextEditingController _messageCtrl = TextEditingController();
+  Timer? _autoDismissTimer;
+  int _secondsRemaining = 60;
+  bool _userInteracted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoDismissTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_userInteracted) {
+        // Reset timer on interaction
+        _secondsRemaining = 60;
+        _userInteracted = false;
+        return;
+      }
+      _secondsRemaining--;
+      if (_secondsRemaining <= 0) {
+        timer.cancel();
+        if (mounted) widget.onCancel();
+      }
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoDismissTimer?.cancel();
+    _messageCtrl.dispose();
+    super.dispose();
+  }
+
+  void _markInteracted() => _userInteracted = true;
+
+  Color _painColor(int level) {
+    if (level <= 3) return const Color(0xFF22C55E);
+    if (level <= 5) return const Color(0xFFF59E0B);
+    if (level <= 7) return const Color(0xFFF97316);
+    return const Color(0xFFE53935);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top bar: title + cancel
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.warning_rounded,
+                        color: Color(0xFFE53935), size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text('Pain Alert',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A))),
+                  ),
+                  TextButton(
+                    onPressed: widget.onCancel,
+                    child: Text('Cancel',
+                        style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Pain level
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Pain Level',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A))),
+              ),
+              const SizedBox(height: 8),
+
+              // Large number display
+              Text(
+                '$_painLevel',
+                style: TextStyle(
+                  fontSize: 52,
+                  fontWeight: FontWeight.w900,
+                  color: _painColor(_painLevel),
+                ),
+              ),
+              Text(
+                'out of 10',
+                style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+
+              // Slider
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: _painColor(_painLevel),
+                  thumbColor: _painColor(_painLevel),
+                  inactiveTrackColor:
+                      _painColor(_painLevel).withValues(alpha: 0.2),
+                  overlayColor:
+                      _painColor(_painLevel).withValues(alpha: 0.12),
+                ),
+                child: Slider(
+                  value: _painLevel.toDouble(),
+                  min: 1,
+                  max: 10,
+                  divisions: 9,
+                  label: '$_painLevel',
+                  onChanged: (v) {
+                    _markInteracted();
+                    setState(() => _painLevel = v.round());
+                  },
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Mild', style: TextStyle(
+                      fontSize: 11, color: Colors.grey.shade500)),
+                  Text('Severe', style: TextStyle(
+                      fontSize: 11, color: Colors.grey.shade500)),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Message field
+              TextField(
+                controller: _messageCtrl,
+                maxLines: 2,
+                onChanged: (_) => _markInteracted(),
+                decoration: InputDecoration(
+                  labelText: 'What happened? (optional)',
+                  hintText: 'e.g. sharp knee pain, feeling dizzy',
+                  hintStyle: TextStyle(color: Colors.grey.shade400),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Send Alert button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    final msg = _messageCtrl.text.trim();
+                    widget.onSend(_painLevel, msg.isEmpty ? null : msg);
+                  },
+                  icon: const Icon(Icons.send),
+                  label: const Text('Send Alert',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 16)),
+                ),
+              ),
+
+              // Auto-dismiss indicator
+              const SizedBox(height: 10),
+              Text(
+                'Auto-dismisses in ${_secondsRemaining}s',
+                style: TextStyle(
+                    fontSize: 11, color: Colors.grey.shade400),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pain Alert Banner — shown after alert is sent
+// ---------------------------------------------------------------------------
+
+class _PainAlertBanner extends StatelessWidget {
+  final String therapistName;
+  final VoidCallback onEndSession;
+  final VoidCallback? onResume;
+
+  const _PainAlertBanner({
+    required this.therapistName,
+    required this.onEndSession,
+    this.onResume,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE53935), Color(0xFFD32F2F)],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.warning_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('\uD83D\uDEA8 Alert sent. Help is on the way.',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your alert has been sent to $therapistName. '
+              'You can close this session when you feel ready.',
+              style: const TextStyle(
+                  color: Colors.white70, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFFE53935),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: onEndSession,
+                    child: const Text('End Session',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+                if (onResume != null) ...[
+                  const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: onResume,
+                    child: const Text('Resume',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );
