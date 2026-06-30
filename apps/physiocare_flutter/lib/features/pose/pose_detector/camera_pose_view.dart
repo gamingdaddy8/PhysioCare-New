@@ -299,6 +299,37 @@ class _CameraPoseViewState extends State<CameraPoseView> {
       } else {
         msg = 'Lift leg sideways out'; color = Colors.white;
       }
+    } else if (_selectedExercise == ExerciseType.squats) {
+      final lh = _lastPose?.landmarks[PoseLandmarkType.leftHip];
+      final lk = _lastPose?.landmarks[PoseLandmarkType.leftKnee];
+      final la = _lastPose?.landmarks[PoseLandmarkType.leftAnkle];
+      final rh = _lastPose?.landmarks[PoseLandmarkType.rightHip];
+      final rk = _lastPose?.landmarks[PoseLandmarkType.rightKnee];
+      final ra = _lastPose?.landmarks[PoseLandmarkType.rightAnkle];
+
+      double? kneeAngle;
+      if (lh != null && lk != null && la != null) {
+        kneeAngle = _angle3(lh, lk, la);
+      } else if (rh != null && rk != null && ra != null) {
+        kneeAngle = _angle3(rh, rk, ra);
+      }
+
+      if (kneeAngle == null) {
+        msg = 'Stand in frame with legs visible';
+        color = Colors.orangeAccent;
+      } else if (kneeAngle < _squatLogic.downThreshold) {
+        msg = 'Good! Now stand up';
+        color = Colors.greenAccent;
+      } else if (kneeAngle < 140) {
+        msg = 'Go a bit lower';
+        color = Colors.white70;
+      } else if (kneeAngle < 70) {
+        msg = "Don't go too low";
+        color = Colors.orange;
+      } else {
+        msg = 'Lower your hips to squat';
+        color = Colors.white;
+      }
     } else if (_selectedExercise == ExerciseType.seatedKneeExtension) {
       final l = _kneeExtensionLogic.leftAngle;
       final r = _kneeExtensionLogic.rightAngle;

@@ -416,7 +416,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
                 constraints: const BoxConstraints(maxWidth: 1200),
                 child: Padding(
                   padding: const EdgeInsets.all(18),
-                  child: isWide ? _wideLayout() : _mobileBlocked(),
+                  child: isWide ? _wideLayout() : _narrowLayout(),
                 ),
               ),
             ),
@@ -469,33 +469,18 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
     );
   }
 
-  Widget _mobileBlocked() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.desktop_windows, size: 44, color: kSub),
-          SizedBox(height: 14),
-          Text('Web Mode Only',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: kTextDark)),
-          SizedBox(height: 8),
-          Text(
-            'This exercise session layout is designed for Web/Tablet.\n\nOpen PhysioCare on a wider screen to continue.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: kSub),
-          ),
-        ],
-      ),
+  Widget _narrowLayout() {
+    return Column(
+      children: [
+        SizedBox(
+          height: 280,
+          child: _cameraPanel(),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _referencePanel(),
+        ),
+      ],
     );
   }
 

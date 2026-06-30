@@ -46,6 +46,16 @@ class _ExerciseReferencePlayerState
       title:       'Bodyweight Squat (Rehab)',
       description: 'Physiotherapy squat — feet shoulder-width, lower slowly, keep knees over toes',
     ),
+    ExerciseType.standingHipAbduction: _VideoInfo(
+      videoId:     'qBqKuEQl9sI',
+      title:       'Standing Hip Abduction',
+      description: 'Slowly lift leg sideways, keep toes forward and body upright. Use support if needed.',
+    ),
+    ExerciseType.seatedKneeExtension: _VideoInfo(
+      videoId:     '0k7Y3g4Z_u8',
+      title:       'Seated Knee Extension',
+      description: 'Sit straight, slowly extend knee until leg is straight, hold 2s, lower slowly with control.',
+    ),
   };
 
   // Unique view ID per exercise to avoid iframe conflicts

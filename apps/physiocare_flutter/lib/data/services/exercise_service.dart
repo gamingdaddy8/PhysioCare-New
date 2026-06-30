@@ -86,11 +86,11 @@ class ExerciseService {
   // Seed default exercises into the master catalog if they don't exist
   Future<void> seedDefaultExercises() async {
     final defaults = [
-      {'title': 'Bicep Curl',             'category': 'Arm',    'default_reps': 10, 'default_sets': 3, 'description': 'Slowly lift weights toward shoulders.'},
-      {'title': 'Side Raise',             'category': 'Shoulder', 'default_reps': 10, 'default_sets': 3, 'description': 'Lift arms out to the sides.'},
-      {'title': 'Squats',                 'category': 'Leg',    'default_reps': 12, 'default_sets': 3, 'description': 'Lower hips as if sitting on a chair.'},
-      {'title': 'Standing Hip Abduction', 'category': 'Leg',    'default_reps': 10, 'default_sets': 3, 'description': 'Lift leg out to the side while standing.'},
-      {'title': 'Seated Knee Extension',  'category': 'Leg',    'default_reps': 12, 'default_sets': 3, 'description': 'Straighten knee while sitting.'},
+      {'title': 'Bicep Curl',             'category': 'Upper Body', 'default_reps': 10, 'default_sets': 3, 'description': 'Slowly lift weights toward shoulders.'},
+      {'title': 'Side Raise',             'category': 'Upper Body', 'default_reps': 10, 'default_sets': 3, 'description': 'Lift arms out to the sides.'},
+      {'title': 'Squats',                 'category': 'Lower Body', 'default_reps': 12, 'default_sets': 3, 'description': 'Lower hips as if sitting on a chair.'},
+      {'title': 'Standing Hip Abduction', 'category': 'Lower Body', 'default_reps': 10, 'default_sets': 3, 'description': 'Lift leg out to the side while standing.'},
+      {'title': 'Seated Knee Extension',  'category': 'Lower Body', 'default_reps': 12, 'default_sets': 3, 'description': 'Straighten knee while sitting.'},
     ];
 
     for (final ex in defaults) {

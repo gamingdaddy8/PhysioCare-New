@@ -94,14 +94,17 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
 
       _assignedExercises = List<Map<String, dynamic>>.from(assigned);
 
-      // 4) Count sessions completed today
+      // 4) Count sessions completed today (reps > 0 and within local day range)
+      final startOfDay = DateTime(today.year, today.month, today.day, 0, 0, 0);
+      final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59, 999);
 
       final sessions = await _supabase
           .from('session_reports')
           .select('id')
           .eq('patient_id', user.id)
-          .gte('created_at', '${todayStr}T00:00:00')
-          .lte('created_at', '${todayStr}T23:59:59');
+          .gt('reps_done', 0)
+          .gte('created_at', startOfDay.toUtc().toIso8601String())
+          .lte('created_at', endOfDay.toUtc().toIso8601String());
 
       _completedToday = (sessions as List).length;
     } catch (e) {
@@ -597,8 +600,11 @@ class _TodaySessionCard extends StatelessWidget {
                             );
                           },
                     icon:  const Icon(Icons.play_arrow),
-                    label: const Text('Start Session',
-                        style: TextStyle(fontWeight: FontWeight.w900)),
+                    label: Text(
+                        firstExercise == null
+                            ? 'Start Session'
+                            : 'Start: ${firstExercise!['exercises']?['title'] ?? 'Session'}',
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                 ),
               ],

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../appointments/services/appointment_service.dart';
 import '../../reports/screens/therapist_report_screen.dart';
 import '../../../data/services/exercise_service.dart';
+import '../../../data/services/pain_alert_service.dart';
 import '../../../core/utils/exercise_status_utils.dart';
 
 class TherapistPatientDetailScreen extends StatefulWidget {
@@ -43,6 +44,7 @@ class _TherapistPatientDetailScreenState
   List<Map<String, dynamic>> _assigned       = [];
   List<Map<String, dynamic>> _sessionReports = [];
   List<Map<String, dynamic>> _feedbackList   = [];
+  List<Map<String, dynamic>> _painAlerts     = [];
 
   final TextEditingController _feedbackCtrl = TextEditingController();
 
@@ -104,6 +106,9 @@ class _TherapistPatientDetailScreenState
 
       // 5) Feedback
       await _loadFeedback();
+
+      // 6) Pain alerts
+      await _loadPainAlerts();
 
       setState(() {
         _loading = false;
@@ -189,6 +194,35 @@ class _TherapistPatientDetailScreenState
       debugPrint('Error loading feedback: $e');
     }
   }
+
+  Future<void> _loadPainAlerts() async {
+    try {
+      setState(() => _status = 'Loading pain alerts...');
+      final rows = await PainAlertService().fetchPatientAlerts(widget.patientId);
+      setState(() => _painAlerts = List<Map<String, dynamic>>.from(rows));
+    } catch (e) {
+      debugPrint('Error loading pain alerts: $e');
+    }
+  }
+
+  Future<void> _reviewPainAlert(String alertId) async {
+    try {
+      await PainAlertService().markAlertReviewed(alertId);
+      await _loadPainAlerts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pain alert marked as reviewed ✅')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to review alert: $e')),
+      );
+    }
+  }
+
+  int get _activeAlertsCount =>
+      _painAlerts.where((a) => a['status'] == 'active').length;
 
   // ── Actions ───────────────────────────────────────────────────
 
@@ -374,10 +408,11 @@ class _TherapistPatientDetailScreenState
                               value: _sessionReports.length.toString(),
                               icon:  Icons.bar_chart_rounded,
                             ),
-                            const _MiniStatCard(
+                            _MiniStatCard(
                               title: 'Pain Alerts',
-                              value: '0',
+                              value: _activeAlertsCount.toString(),
                               icon:  Icons.warning_rounded,
+                              color: _activeAlertsCount > 0 ? Colors.red : null,
                             ),
                           ],
                         ),
@@ -401,6 +436,11 @@ class _TherapistPatientDetailScreenState
                                       sessions: _sessionReports,
                                       patientId: widget.patientId,
                                       patientName: patientName,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  _PainAlertsCard(
+                                      alerts: _painAlerts,
+                                      onReview: _reviewPainAlert,
                                   ),
                                 ]),
                               ),
@@ -434,6 +474,11 @@ class _TherapistPatientDetailScreenState
                                 sessions: _sessionReports,
                                 patientId: widget.patientId,
                                 patientName: patientName,
+                            ),
+                            const SizedBox(height: 18),
+                            _PainAlertsCard(
+                                alerts: _painAlerts,
+                                onReview: _reviewPainAlert,
                             ),
                             const SizedBox(height: 18),
                             _FeedbackCard(
@@ -588,11 +633,18 @@ class _MiniStatCard extends StatelessWidget {
   final String   title;
   final String   value;
   final IconData icon;
-  const _MiniStatCard(
-      {required this.title, required this.value, required this.icon});
+  final Color?   color;
+
+  const _MiniStatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final activeColor = color ?? TherapistPatientDetailScreen.kPrimary;
     return Container(
       width: 240,
       padding: const EdgeInsets.all(16),
@@ -611,12 +663,10 @@ class _MiniStatCard extends StatelessWidget {
           height: 46,
           width:  46,
           decoration: BoxDecoration(
-            color: TherapistPatientDetailScreen.kPrimary
-                .withOpacity(0.12),
+            color: activeColor.withOpacity(0.12),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon,
-              color: TherapistPatientDetailScreen.kPrimary),
+          child: Icon(icon, color: activeColor),
         ),
         const SizedBox(width: 14),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1216,6 +1266,235 @@ class _AddExerciseDialogState extends State<_AddExerciseDialog> {
               style: TextStyle(fontWeight: FontWeight.w900)),
         ),
       ],
+    );
+  }
+}
+
+class _PainAlertsCard extends StatelessWidget {
+  final List<Map<String, dynamic>> alerts;
+  final Function(String) onReview;
+
+  const _PainAlertsCard({
+    required this.alerts,
+    required this.onReview,
+  });
+
+  String _fmt(String? iso) {
+    if (iso == null) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year}  '
+          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  Color _levelColor(int level) {
+    if (level >= 8) return Colors.red.shade700;
+    if (level >= 4) return Colors.orange.shade700;
+    return Colors.green.shade700;
+  }
+
+  Color _levelBg(int level) {
+    if (level >= 8) return Colors.red.shade50;
+    if (level >= 4) return Colors.orange.shade50;
+    return Colors.green.shade50;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ModernCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_rounded, color: Colors.orange),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Pain Alerts History',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: TherapistPatientDetailScreen.kDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (alerts.isEmpty)
+            const Text(
+              'No pain alerts recorded for this patient.',
+              style: TextStyle(
+                color: TherapistPatientDetailScreen.kSub,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            ...alerts.map((a) {
+              final alertId = a['id']?.toString() ?? '';
+              final exercise = a['exercise_title'] ?? 'General Session';
+              final level = int.tryParse(a['pain_level']?.toString() ?? '5') ?? 5;
+              final msg = a['message'] ?? '';
+              final status = a['status'] ?? 'active';
+              final date = _fmt(a['created_at']?.toString());
+              final duration = a['session_duration_at_alert'] ?? 0;
+              final durationMin = (duration ~/ 60);
+
+              final col = _levelColor(level);
+              final bg = _levelBg(level);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: status == 'active'
+                        ? Colors.red.withOpacity(0.04)
+                        : TherapistPatientDetailScreen.kBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: status == 'active'
+                          ? Colors.red.withOpacity(0.2)
+                          : Colors.black12.withOpacity(0.08),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: bg,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Level',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: col,
+                                  ),
+                                ),
+                                Text(
+                                  '$level/10',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    color: col,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  exercise,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: TherapistPatientDetailScreen.kDark,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$date${duration > 0 ? " • At ${durationMin}m" : ""}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: TherapistPatientDetailScreen.kSub,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (status == 'active')
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red.shade600,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onPressed: () => onReview(alertId),
+                              child: const Text(
+                                'Resolve',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Reviewed',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (msg.toString().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.02),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            msg,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              fontStyle: FontStyle.italic,
+                              color: TherapistPatientDetailScreen.kDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
     );
   }
 }
