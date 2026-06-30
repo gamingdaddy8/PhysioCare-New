@@ -7,6 +7,7 @@ import '../services/report_service.dart';
 import '../services/report_generator.dart';
 import '../services/ai_summary_service.dart';
 import 'package:physiocare_flutter/config/env.dart';
+import '../../appointments/services/appointment_service.dart';
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
 const _kPrimary = Color(0xFF1FC7B6);
@@ -149,6 +150,15 @@ class _TherapistReportScreenState extends State<TherapistReportScreen> {
         'message': text,
         'created_at': DateTime.now().toIso8601String(),
       });
+
+      // Send notification to patient
+      await AppointmentService().createNotification(
+        userId: widget.patientId,
+        title: 'New Feedback Received',
+        body: 'Your therapist has sent you feedback on your progress report.',
+        type: 'feedback',
+        referenceId: therapistId,
+      );
 
       _feedbackCtrl.clear();
       if (!mounted) return;

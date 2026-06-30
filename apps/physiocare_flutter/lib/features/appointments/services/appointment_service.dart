@@ -303,6 +303,24 @@ class AppointmentService {
     await _db.from('notifications').update({'is_read': true}).eq('user_id', userId);
   }
 
+  Future<void> createNotification({
+    required String userId,
+    required String title,
+    required String body,
+    required String type,
+    String? referenceId,
+  }) async {
+    await _db.from('notifications').insert({
+      'user_id':      userId,
+      'title':        title,
+      'body':         body,
+      'type':         type,
+      'reference_id': referenceId,
+      'is_read':      false,
+      'created_at':   DateTime.now().toIso8601String(),
+    });
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
   String _fmt(DateTime d) =>

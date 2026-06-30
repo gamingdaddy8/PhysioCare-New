@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../appointments/screens/notifications_screen.dart';
+import '../../appointments/services/appointment_service.dart';
 
 class PatientPortalHomeScreen extends StatefulWidget {
   const PatientPortalHomeScreen({super.key});
@@ -22,6 +24,7 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
   bool _loading = true;
   String _patientName      = 'there';
   String _patientDisplayId = '';
+  String _therapistId    = '';
   String _therapistName    = '';
   String _therapistDisplayId = '';
 
@@ -52,12 +55,12 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         _patientDisplayId = profile['display_id'] ?? '';
 
         // 2) Fetch assigned therapist's name + display_id
-        final therapistId = profile['assigned_therapist_id']?.toString();
-        if (therapistId != null && therapistId.isNotEmpty) {
+        _therapistId = profile['assigned_therapist_id']?.toString() ?? '';
+        if (_therapistId.isNotEmpty) {
           final therapist = await _supabase
               .from('profiles')
               .select('full_name, display_id')
-              .eq('id', therapistId)
+              .eq('id', _therapistId)
               .maybeSingle();
           if (therapist != null) {
             _therapistName      = therapist['full_name']  ?? '';
@@ -66,7 +69,11 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         }
       }
 
-      // 3) Fetch assigned exercises (active ones)
+      // 3) Fetch assigned exercises (active ones — derived from date range)
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
       final assigned = await _supabase
           .from('assigned_exercises')
           .select('''
@@ -80,15 +87,14 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
             exercises ( id, title )
           ''')
           .eq('patient_id', user.id)
-          .eq('status', 'active')
+          .neq('status', 'paused')
+          .lte('start_date', todayStr)
+          .gte('end_date', todayStr)
           .order('created_at', ascending: false);
 
       _assignedExercises = List<Map<String, dynamic>>.from(assigned);
 
       // 4) Count sessions completed today
-      final today    = DateTime.now();
-      final todayStr =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
       final sessions = await _supabase
           .from('session_reports')
@@ -116,6 +122,17 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         'description': note,
         'created_at':  DateTime.now().toIso8601String(),
       });
+
+      // Notify therapist if assigned
+      if (_therapistId.isNotEmpty) {
+        await AppointmentService().createNotification(
+          userId: _therapistId,
+          title: 'Emergency: Pain Reported',
+          body: '$_patientName reported a pain level of $level/10.',
+          type: 'pain_alert',
+          referenceId: user.id,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -222,6 +239,7 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         titleSpacing: 18,
         title: const _TopTitle(),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip:  'Refresh',
             onPressed: _loadData,
@@ -265,6 +283,7 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
                           isWide:         isWide,
                           completedToday: _completedToday,
                           assignedCount:  _assignedExercises.length,
+                          firstExercise:  _assignedExercises.isNotEmpty ? _assignedExercises.first : null,
                         ),
                         const SizedBox(height: 18),
 
@@ -505,11 +524,13 @@ class _TodaySessionCard extends StatelessWidget {
   final bool isWide;
   final int  completedToday;
   final int  assignedCount;
+  final Map<String, dynamic>? firstExercise;
 
   const _TodaySessionCard({
     required this.isWide,
     required this.completedToday,
     required this.assignedCount,
+    required this.firstExercise,
   });
 
   @override
@@ -555,10 +576,26 @@ class _TodaySessionCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: assignedCount == 0
+                    onPressed: firstExercise == null
                         ? null
-                        : () => Navigator.pushNamed(
-                            context, AppRoutes.exerciseSession),
+                        : () {
+                            final ex    = firstExercise!;
+                            final title = ex['exercises']?['title'] ?? 'Exercise';
+                            final reps  = ex['reps'] ?? 10;
+                            final exId  = ex['exercises']?['id']?.toString() ?? '';
+                            final assId = ex['id']?.toString() ?? '';
+
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.exerciseSession,
+                              arguments: {
+                                'assigned_exercise_id': assId,
+                                'exercise_id':          exId,
+                                'title':                title,
+                                'reps':                 reps,
+                              },
+                            );
+                          },
                     icon:  const Icon(Icons.play_arrow),
                     label: const Text('Start Session',
                         style: TextStyle(fontWeight: FontWeight.w900)),
@@ -603,6 +640,10 @@ class _QuickActionsRow extends StatelessWidget {
           title: 'Schedule',
           icon:  Icons.calendar_month_outlined,
           route: AppRoutes.patientSchedule),
+      _QuickActionCard(
+          title: 'Alerts',
+          icon:  Icons.notifications_active_outlined,
+          route: AppRoutes.notifications),
     ];
 
     if (isWide) {
@@ -612,6 +653,8 @@ class _QuickActionsRow extends StatelessWidget {
         Expanded(child: cards[1]),
         const SizedBox(width: 14),
         Expanded(child: cards[2]),
+        const SizedBox(width: 14),
+        Expanded(child: cards[3]),
       ]);
     }
     return Column(children: [
@@ -620,6 +663,8 @@ class _QuickActionsRow extends StatelessWidget {
       cards[1],
       const SizedBox(height: 12),
       cards[2],
+      const SizedBox(height: 12),
+      cards[3],
     ]);
   }
 }

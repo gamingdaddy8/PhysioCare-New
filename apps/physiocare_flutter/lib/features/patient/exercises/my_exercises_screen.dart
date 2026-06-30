@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/utils/exercise_status_utils.dart';
 
 class MyExercisesScreen extends StatefulWidget {
   const MyExercisesScreen({super.key});
@@ -35,12 +36,20 @@ class _MyExercisesScreenState extends State<MyExercisesScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      // Auto-complete expired exercises
-      await _supabase
-          .from('assigned_exercises')
-          .update({'status': 'completed'})
-          .eq('status', 'active')
-          .lt('end_date', DateTime.now().toIso8601String().substring(0, 10));
+      // Best-effort housekeeping: auto-complete expired exercises
+      try {
+        final pid = _supabase.auth.currentUser?.id;
+        if (pid != null) {
+          await _supabase
+              .from('assigned_exercises')
+              .update({'status': 'completed'})
+              .eq('patient_id', pid)
+              .eq('status', 'active')
+              .lt('end_date', DateTime.now().toIso8601String().substring(0, 10));
+        }
+      } catch (e) {
+        debugPrint('Auto-complete update skipped: $e');
+      }
 
       final rows = await _supabase
           .from('assigned_exercises')
@@ -72,9 +81,9 @@ class _MyExercisesScreenState extends State<MyExercisesScreen> {
     List<Map<String, dynamic>> list = List.from(_allExercises);
 
     if (_selectedFilter == 'Active') {
-      list = list.where((e) => e['status'] == 'active').toList();
+      list = list.where((e) => effectiveExerciseStatus(e) == 'active').toList();
     } else if (_selectedFilter == 'Completed') {
-      list = list.where((e) => e['status'] == 'completed').toList();
+      list = list.where((e) => effectiveExerciseStatus(e) == 'completed').toList();
     }
 
     if (_searchQuery.isNotEmpty) {
@@ -264,6 +273,7 @@ class _ExerciseCard extends StatelessWidget {
       case 'active':    return const Color(0xFF1FC7B6);
       case 'completed': return const Color(0xFF22C55E);
       case 'paused':    return const Color(0xFFF59E0B);
+      case 'upcoming':  return const Color(0xFF6366F1);
       default:          return kSub;
     }
   }
@@ -273,6 +283,7 @@ class _ExerciseCard extends StatelessWidget {
       case 'active':    return 'Active';
       case 'completed': return 'Completed';
       case 'paused':    return 'Paused';
+      case 'upcoming':  return 'Upcoming';
       default:          return status ?? '';
     }
   }
@@ -284,10 +295,11 @@ class _ExerciseCard extends StatelessWidget {
     final reps       = exercise['reps'] as int? ?? 0;
     final sessions   = exercise['sessions_per_day'] as int? ?? 1;
     final days       = exercise['total_days'] as int? ?? 0;
-    final status     = exercise['status']?.toString();
+    final status     = effectiveExerciseStatus(exercise);
     final start      = exercise['start_date']?.toString() ?? '';
     final end        = exercise['end_date']?.toString() ?? '';
     final isCompleted = status == 'completed';
+    final isUpcoming  = status == 'upcoming';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -380,16 +392,20 @@ class _ExerciseCard extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: isCompleted ? kSub : kPrimary,
+                backgroundColor: (isCompleted || isUpcoming) ? kSub : kPrimary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              onPressed: isCompleted ? null : onStart,
+              onPressed: (isCompleted || isUpcoming) ? null : onStart,
               icon: const Icon(Icons.play_arrow, size: 20),
               label: Text(
-                isCompleted ? 'Completed' : 'Start Exercise',
+                isCompleted
+                    ? 'Completed'
+                    : isUpcoming
+                        ? 'Starts ${exercise['start_date']}'
+                        : 'Start Exercise',
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),

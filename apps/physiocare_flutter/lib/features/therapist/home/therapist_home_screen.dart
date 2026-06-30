@@ -5,6 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../data/services/therapist_service.dart';
 import '../patient_details/therapist_patient_detail_screen.dart';
+import '../../appointments/screens/notifications_screen.dart';
+import '../../appointments/screens/therapist_bookings_screen.dart';
+import '../../appointments/screens/therapist_availability_screen.dart';
+import '../../reports/screens/therapist_report_screen.dart';
+import '../../../data/services/exercise_service.dart';
 
 class TherapistHomeScreen extends StatefulWidget {
   const TherapistHomeScreen({super.key});
@@ -41,8 +46,15 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _seedExercises();
     _loadTherapistAndPatients();
     _searchCtrl.addListener(_applySearch);
+  }
+
+  Future<void> _seedExercises() async {
+    try {
+      await ExerciseService().seedDefaultExercises();
+    } catch (_) {}
   }
 
   @override
@@ -167,6 +179,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
               color: TherapistHomeScreen.kDark),
         ),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip:  'Refresh',
             onPressed: _loadTherapistAndPatients,
@@ -238,6 +251,60 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                           ],
                         ),
 
+                        const SizedBox(height: 18),
+
+                        // ── Quick Actions ──────────────────────────
+                        const Text(
+                          'Quick Actions',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: TherapistHomeScreen.kDark),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 14,
+                          runSpacing: 14,
+                          children: [
+                            _QuickActionCard(
+                              icon:  Icons.calendar_month_rounded,
+                              title: 'Appointment Requests',
+                              subtitle: 'View & manage bookings',
+                              color: const Color(0xFFF59E0B),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const TherapistBookingsScreen()),
+                              ),
+                            ),
+                            _QuickActionCard(
+                              icon:  Icons.schedule_rounded,
+                              title: 'Manage Availability',
+                              subtitle: 'Set time slots & blocked dates',
+                              color: const Color(0xFF6366F1),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const TherapistAvailabilityScreen()),
+                              ),
+                            ),
+                            _QuickActionCard(
+                              icon:  Icons.notifications_active_rounded,
+                              title: 'Notifications',
+                              subtitle: 'Check alerts & updates',
+                              color: const Color(0xFFEC4899),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const NotificationsScreen()),
+                              ),
+                            ),
+                          ],
+                        ),
+
                         const SizedBox(height: 22),
 
                         // ── Section title + status ────────────────
@@ -279,6 +346,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                             children: _filtered.map((p) => SizedBox(
                               width: 360,
                               child: _PatientCard(
+                                patientId: p['id'].toString(),
                                 name:      p['full_name'] ?? 'Patient',
                                 displayId: p['display_id'] ?? '',
                                 condition: p['condition'] ?? 'Rehab',
@@ -299,6 +367,7 @@ class _TherapistHomeScreenState extends State<TherapistHomeScreen> {
                             children: _filtered.map((p) => Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _PatientCard(
+                                patientId: p['id'].toString(),
                                 name:      p['full_name'] ?? 'Patient',
                                 displayId: p['display_id'] ?? '',
                                 condition: p['condition'] ?? 'Rehab',
@@ -546,12 +615,14 @@ class _MiniStatCard extends StatelessWidget {
 // ── Patient card (now shows display_id badge) ─────────────────────────────────
 
 class _PatientCard extends StatelessWidget {
+  final String     patientId;
   final String     name;
   final String     displayId;
   final String     condition;
   final VoidCallback onTap;
 
   const _PatientCard({
+    required this.patientId,
     required this.name,
     required this.displayId,
     required this.condition,
@@ -624,6 +695,19 @@ class _PatientCard extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            tooltip: 'View Report',
+            icon: const Icon(Icons.analytics_outlined, color: TherapistHomeScreen.kPrimary),
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => TherapistReportScreen(
+                        patientId: patientId,
+                        patientName: name,
+                    ),
+                ),
+            ),
+          ),
           const Icon(Icons.chevron_right),
         ]),
       ),
@@ -691,6 +775,78 @@ class _NoResultsCard extends StatelessWidget {
               color: TherapistHomeScreen.kSub, fontSize: 13),
         ),
       ]),
+    );
+  }
+}
+
+// ── Quick-action card ─────────────────────────────────────────────────────────
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData   icon;
+  final String     title;
+  final String     subtitle;
+  final Color      color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        width: 240,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withOpacity(0.18)),
+          boxShadow: [
+            BoxShadow(
+                color: color.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            height: 46,
+            width:  46,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: TherapistHomeScreen.kDark,
+                        fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: TherapistHomeScreen.kSub,
+                        fontSize: 12)),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right, color: color.withOpacity(0.5), size: 20),
+        ]),
+      ),
     );
   }
 }

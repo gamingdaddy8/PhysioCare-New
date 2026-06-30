@@ -125,8 +125,22 @@ class _TherapistBookingsScreenState extends State<TherapistBookingsScreen>
     try {
       if (accept) {
         await _service.acceptAppointment(apt.id);
+        await _service.createNotification(
+          userId: apt.patientId,
+          title: 'Appointment Confirmed',
+          body: 'Your appointment on ${apt.formattedDate} has been confirmed.',
+          type: 'appointment_confirmed',
+          referenceId: apt.id,
+        );
       } else {
         await _service.rejectAppointment(apt.id, reason: notes?.isEmpty == true ? null : notes);
+        await _service.createNotification(
+          userId: apt.patientId,
+          title: 'Appointment Rejected',
+          body: 'Your appointment request was not accepted.',
+          type: 'appointment_rejected',
+          referenceId: apt.id,
+        );
       }
       await _load();
     } catch (e) {

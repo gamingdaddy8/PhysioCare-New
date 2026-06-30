@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ExerciseService {
@@ -80,5 +81,35 @@ class ExerciseService {
         .from('assigned_exercises')
         .update({'status': status})
         .eq('id', assignedExerciseId);
+  }
+
+  // Seed default exercises into the master catalog if they don't exist
+  Future<void> seedDefaultExercises() async {
+    final defaults = [
+      {'title': 'Bicep Curl',             'category': 'Arm',    'default_reps': 10, 'default_sets': 3, 'description': 'Slowly lift weights toward shoulders.'},
+      {'title': 'Side Raise',             'category': 'Shoulder', 'default_reps': 10, 'default_sets': 3, 'description': 'Lift arms out to the sides.'},
+      {'title': 'Squats',                 'category': 'Leg',    'default_reps': 12, 'default_sets': 3, 'description': 'Lower hips as if sitting on a chair.'},
+      {'title': 'Standing Hip Abduction', 'category': 'Leg',    'default_reps': 10, 'default_sets': 3, 'description': 'Lift leg out to the side while standing.'},
+      {'title': 'Seated Knee Extension',  'category': 'Leg',    'default_reps': 12, 'default_sets': 3, 'description': 'Straighten knee while sitting.'},
+    ];
+
+    for (final ex in defaults) {
+      // Check if already exists by title
+      final existing = await _supabase
+          .from('exercises')
+          .select('id')
+          .eq('title', ex['title']!)
+          .maybeSingle();
+
+      if (existing == null) {
+        try {
+          await _supabase.from('exercises').insert(ex);
+        } catch (e) {
+          // If we hit RLS (42501), just skip. It means the therapist 
+          // isn't allowed to add master exercises, which is normal.
+          debugPrint('Seed check: Permission denied to add ${ex['title']}');
+        }
+      }
+    }
   }
 }

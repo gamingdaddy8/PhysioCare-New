@@ -62,10 +62,8 @@ class AppRoutes {
     patientExercises: (context) => const MyExercisesScreen(),
     patientReports: (context) => const SessionReportsScreen(),
 
-    // Schedule placeholder (for now)
-    patientSchedule: (context) => const Scaffold(
-          body: Center(child: Text("Schedule page (TODO)")),
-        ),
+    // Schedule – shows the patient's appointments list (with Book FAB)
+    patientSchedule: (context) => const MyAppointmentsScreen(),
 
     // Therapist Portal
     therapistHome: (context) => const TherapistHomeScreen(),

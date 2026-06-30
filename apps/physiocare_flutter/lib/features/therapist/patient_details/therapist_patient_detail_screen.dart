@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../appointments/services/appointment_service.dart';
+import '../../reports/screens/therapist_report_screen.dart';
+import '../../../data/services/exercise_service.dart';
+import '../../../core/utils/exercise_status_utils.dart';
 
 class TherapistPatientDetailScreen extends StatefulWidget {
   final String patientId;
@@ -82,6 +86,10 @@ class _TherapistPatientDetailScreenState
 
       // 2) Exercise master list
       setState(() => _status = 'Loading exercises...');
+      
+      // Auto-seed if needed
+      await ExerciseService().seedDefaultExercises();
+
       final exercises = await _supabase
           .from('exercises')
           .select()
@@ -211,6 +219,15 @@ class _TherapistPatientDetailScreenState
       'status':           'active',
     });
 
+    // Send notification to patient
+    await AppointmentService().createNotification(
+        userId: widget.patientId,
+        title: 'New Exercise Assigned',
+        body: 'Your therapist has assigned you a new exercise to your plan.',
+        type: 'exercise',
+        referenceId: therapistId,
+    );
+
     await _loadAssignedExercises();
     if (!mounted) return;
 
@@ -235,6 +252,15 @@ class _TherapistPatientDetailScreenState
         'message':      text,
         'created_at':   DateTime.now().toIso8601String(),
       });
+
+      // Send notification to patient
+      await AppointmentService().createNotification(
+        userId: widget.patientId,
+        title: 'New Feedback Received',
+        body: 'Your therapist has sent you a new message.',
+        type: 'feedback',
+        referenceId: therapistId,
+      );
 
       _feedbackCtrl.clear();
       await _loadFeedback();
@@ -372,7 +398,10 @@ class _TherapistPatientDetailScreenState
                                   ),
                                   const SizedBox(height: 18),
                                   _RecentSessionsCard(
-                                      sessions: _sessionReports),
+                                      sessions: _sessionReports,
+                                      patientId: widget.patientId,
+                                      patientName: patientName,
+                                  ),
                                 ]),
                               ),
                               const SizedBox(width: 18),
@@ -402,7 +431,10 @@ class _TherapistPatientDetailScreenState
                             ),
                             const SizedBox(height: 18),
                             _RecentSessionsCard(
-                                sessions: _sessionReports),
+                                sessions: _sessionReports,
+                                patientId: widget.patientId,
+                                patientName: patientName,
+                            ),
                             const SizedBox(height: 18),
                             _FeedbackCard(
                               feedbackList: _feedbackList,
@@ -661,6 +693,7 @@ class _AssignedExercisesCard extends StatelessWidget {
                 sessionsPerDay: sessionsPerDay,
                 startDate:      start,
                 endDate:        end,
+                exerciseRow:    row,
               ),
             );
           }),
@@ -671,6 +704,7 @@ class _AssignedExercisesCard extends StatelessWidget {
 
 class _ExercisePlanTile extends StatelessWidget {
   final String title, reps, totalDays, sessionsPerDay, startDate, endDate;
+  final Map<String, dynamic> exerciseRow;
   const _ExercisePlanTile({
     required this.title,
     required this.reps,
@@ -678,10 +712,34 @@ class _ExercisePlanTile extends StatelessWidget {
     required this.sessionsPerDay,
     required this.startDate,
     required this.endDate,
+    required this.exerciseRow,
   });
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'active':    return const Color(0xFF1FC7B6);
+      case 'completed': return const Color(0xFF22C55E);
+      case 'paused':    return const Color(0xFFF59E0B);
+      case 'upcoming':  return const Color(0xFF6366F1);
+      default:          return TherapistPatientDetailScreen.kSub;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'active':    return 'Active';
+      case 'completed': return 'Completed';
+      case 'paused':    return 'Paused';
+      case 'upcoming':  return 'Upcoming';
+      default:          return status;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final status = effectiveExerciseStatus(exerciseRow);
+    final statusCol = _statusColor(status);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -716,6 +774,21 @@ class _ExercisePlanTile extends StatelessWidget {
                         fontSize: 12)),
               ]),
         ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: statusCol.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            _statusLabel(status),
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: statusCol),
+          ),
+        ),
+        const SizedBox(width: 4),
         const Icon(Icons.chevron_right),
       ]),
     );
@@ -724,7 +797,13 @@ class _ExercisePlanTile extends StatelessWidget {
 
 class _RecentSessionsCard extends StatelessWidget {
   final List<Map<String, dynamic>> sessions;
-  const _RecentSessionsCard({required this.sessions});
+  final String patientId;
+  final String patientName;
+  const _RecentSessionsCard({
+    required this.sessions,
+    required this.patientId,
+    required this.patientName,
+  });
 
   String _fmt(String? iso) {
     if (iso == null) return '';
@@ -742,11 +821,33 @@ class _RecentSessionsCard extends StatelessWidget {
     return _ModernCard(
       child:
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Recent Sessions',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: TherapistPatientDetailScreen.kDark)),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Recent Sessions',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: TherapistPatientDetailScreen.kDark)),
+            ),
+            TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TherapistReportScreen(
+                    patientId: patientId,
+                    patientName: patientName,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.analytics_outlined, size: 18),
+              label: const Text('View Full Report',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
+              style: TextButton.styleFrom(
+                  foregroundColor: TherapistPatientDetailScreen.kPrimary),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         if (sessions.isEmpty)
           const Text('No sessions recorded yet.',

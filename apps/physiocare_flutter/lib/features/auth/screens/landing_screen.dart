@@ -349,12 +349,7 @@ class _HeroSection extends StatelessWidget {
                       );
                     },
                   ),
-                  _OutlineBigButton(
-                    text: "Open Patient Portal",
-                    onTap: () {
-                      Navigator.pushNamed(context, AppRoutes.patientHome);
-                    },
-                  ),
+
                 ],
               ),
 
