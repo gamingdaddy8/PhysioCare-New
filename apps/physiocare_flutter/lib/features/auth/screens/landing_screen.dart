@@ -33,10 +33,7 @@ class LandingScreen extends StatelessWidget {
             child: _HeroSection(isDesktop: isDesktop, isTablet: isTablet),
           ),
 
-          // STATS
-          SliverToBoxAdapter(
-            child: _StatsSection(isMobile: isMobile),
-          ),
+
 
           // FEATURES TITLE
           SliverToBoxAdapter(
@@ -111,7 +108,6 @@ class _Navbar extends StatelessWidget {
           if (isDesktop) ...[
             _NavItem("Features"),
             _NavItem("How It Works"),
-            _NavItem("Pricing"),
             const SizedBox(width: 20),
           ],
 
@@ -362,67 +358,7 @@ class _HeroSection extends StatelessWidget {
   }
 }
 
-class _StatsSection extends StatelessWidget {
-  final bool isMobile;
-  const _StatsSection({required this.isMobile});
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Wrap(
-            alignment: WrapAlignment.spaceEvenly,
-            spacing: 20,
-            runSpacing: 22,
-            children: const [
-              _StatItem(value: "10K+", label: "Active Patients"),
-              _StatItem(value: "500+", label: "Physiotherapists"),
-              _StatItem(value: "95%", label: "Recovery Rate"),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _StatItem({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 44,
-              fontWeight: FontWeight.w900,
-              color: LandingScreen.kPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 15,
-              color: LandingScreen.kSubText,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _SectionTitle extends StatelessWidget {
   final String title;
@@ -885,10 +821,7 @@ class _MobileDrawer extends StatelessWidget {
               title: const Text("How It Works"),
               onTap: () => Navigator.pop(context),
             ),
-            ListTile(
-              title: const Text("Pricing"),
-              onTap: () => Navigator.pop(context),
-            ),
+
           ],
         ),
       ),
