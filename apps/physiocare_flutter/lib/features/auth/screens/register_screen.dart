@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/routes/app_routes.dart';
@@ -115,12 +116,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     // role fields validation
     if (_role == RegisterRole.patient) {
-      if (_patientPhone.text.trim().isEmpty) {
+      final patientPhone = _patientPhone.text.trim();
+      final familyPhone = _familyPhone.text.trim();
+
+      if (patientPhone.isEmpty) {
         _toast("Enter patient phone number");
         return;
       }
-      if (_familyPhone.text.trim().isEmpty) {
+      if (patientPhone.length != 10) {
+        _toast("Patient phone number must be exactly 10 digits");
+        return;
+      }
+      if (familyPhone.isEmpty) {
         _toast("Enter family phone number");
+        return;
+      }
+      if (familyPhone.length != 10) {
+        _toast("Family phone number must be exactly 10 digits");
         return;
       }
       if (_address.text.trim().isEmpty) {
@@ -132,8 +144,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
     } else {
-      if (_therapistPhone.text.trim().isEmpty) {
+      final therapistPhone = _therapistPhone.text.trim();
+      if (therapistPhone.isEmpty) {
         _toast("Enter therapist phone number");
+        return;
+      }
+      if (therapistPhone.length != 10) {
+        _toast("Therapist phone number must be exactly 10 digits");
         return;
       }
       if (_clinicAddress.text.trim().isEmpty) {
@@ -364,6 +381,10 @@ if (!mounted) return;
                           controller: _patientPhone,
                           hint: "9876543210",
                           keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
                         ),
                         const SizedBox(height: 14),
 
@@ -373,6 +394,10 @@ if (!mounted) return;
                           controller: _familyPhone,
                           hint: "9876543210",
                           keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
                         ),
                         const SizedBox(height: 14),
 
@@ -564,6 +589,10 @@ if (!mounted) return;
                           controller: _therapistPhone,
                           hint: "9876543210",
                           keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
                         ),
                         const SizedBox(height: 14),
 
@@ -737,6 +766,7 @@ class _TextField extends StatelessWidget {
   final Widget? suffix;
   final TextInputType? keyboardType;
   final int maxLines;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _TextField({
     required this.controller,
@@ -745,6 +775,7 @@ class _TextField extends StatelessWidget {
     this.suffix,
     this.keyboardType,
     this.maxLines = 1,
+    this.inputFormatters,
   });
 
   @override
@@ -754,6 +785,7 @@ class _TextField extends StatelessWidget {
       obscureText: obscure,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
