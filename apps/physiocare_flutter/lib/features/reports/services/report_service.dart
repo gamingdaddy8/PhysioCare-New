@@ -138,7 +138,7 @@ class ReportService {
             'best_reps': report.bestReps,
             'ai_summary': report.aiSummary,
             'exercise_breakdown': report.exerciseBreakdown,
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
           })
           .select('id')
           .single();

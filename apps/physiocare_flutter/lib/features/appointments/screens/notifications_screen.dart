@@ -67,12 +67,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
+    final localDt = dt.toLocal();
+    final diff = DateTime.now().difference(localDt);
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
+    return '${localDt.day}/${localDt.month}/${localDt.year}';
   }
 
   IconData _typeIcon(String type) {

@@ -123,7 +123,7 @@ class _PatientPortalHomeScreenState extends State<PatientPortalHomeScreen> {
         'patient_id':  user.id,
         'pain_level':  level,
         'description': note,
-        'created_at':  DateTime.now().toIso8601String(),
+        'created_at':  DateTime.now().toUtc().toIso8601String(),
       });
 
       // Notify therapist if assigned

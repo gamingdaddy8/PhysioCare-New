@@ -220,7 +220,18 @@ class NotificationModel {
       type:        m['type']?.toString() ?? '',
       referenceId: m['reference_id']?.toString(),
       isRead:      m['is_read'] as bool? ?? false,
-      createdAt:   DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
+      createdAt:   _parseUtc(m['created_at']?.toString() ?? ''),
     );
+  }
+
+  /// Parse a timestamp string, treating it as UTC if no timezone info is present.
+  /// Supabase stores timestamps in UTC, but may return them without a 'Z' suffix.
+  static DateTime _parseUtc(String s) {
+    final dt = DateTime.tryParse(s);
+    if (dt == null) return DateTime.now();
+    // If the parsed DateTime is not already UTC (no 'Z' or offset in string),
+    // treat it as UTC since that's how Supabase stores it.
+    if (!dt.isUtc) return DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.millisecond);
+    return dt;
   }
 }

@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhysioCare — Exam Feature Distribution</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22252f;
+      --border: #2e3140;
+      --text: #e4e6ef;
+      --text-muted: #9295a5;
+      --accent-1: #6c5ce7;
+      --accent-1-light: #a29bfe;
+      --accent-2: #00cec9;
+      --accent-3: #fd79a8;
+      --accent-4: #fdcb6e;
+      --member-1: #6c5ce7;
+      --member-2: #00cec9;
+      --member-3: #fd79a8;
+      --member-4: #fdcb6e;
+      --success: #00b894;
+      --info: #74b9ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* ───── Header ───── */
+    .header {
+      text-align: center;
+      padding: 3rem 2rem;
+      background: linear-gradient(135deg, rgba(108,92,231,0.15), rgba(0,206,201,0.1));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      margin-bottom: 2.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(circle at 30% 40%, rgba(108,92,231,0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 60%, rgba(0,206,201,0.06) 0%, transparent 50%);
+      animation: float 15s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(3deg); }
+    }
+    .header h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent-1-light), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      position: relative;
+      margin-bottom: 0.5rem;
+    }
+    .header .subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+      position: relative;
+    }
+    .header .emoji { font-size: 2.5rem; margin-bottom: 1rem; position: relative; }
+
+    /* ───── Download Button ───── */
+    .download-bar {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.85rem 2rem;
+      background: linear-gradient(135deg, var(--accent-1), #5a4bd1);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(108,92,231,0.3);
+    }
+    .btn-download:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(108,92,231,0.45);
+    }
+    .btn-download svg { width: 18px; height: 18px; }
+
+    /* ───── Member Cards ───── */
+    .member-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .member-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      border-radius: 16px 16px 0 0;
+    }
+    .member-card.m1::before { background: linear-gradient(90deg, var(--member-1), var(--accent-1-light)); }
+    .member-card.m2::before { background: linear-gradient(90deg, var(--member-2), #55efc4); }
+    .member-card.m3::before { background: linear-gradient(90deg, var(--member-3), #fab1a0); }
+    .member-card.m4::before { background: linear-gradient(90deg, var(--member-4), #ffeaa7); }
+
+    .member-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 1rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+    .m1 .member-badge { background: rgba(108,92,231,0.15); color: var(--accent-1-light); }
+    .m2 .member-badge { background: rgba(0,206,201,0.15); color: var(--accent-2); }
+    .m3 .member-badge { background: rgba(253,121,168,0.15); color: var(--accent-3); }
+    .m4 .member-badge { background: rgba(253,203,110,0.15); color: var(--member-4); }
+
+    .member-card h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .member-card .role-desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ───── Feature Tags ───── */
+    .features-owned {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .feature-tag {
+      padding: 0.4rem 1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .m1 .feature-tag { color: var(--accent-1-light); }
+    .m2 .feature-tag { color: var(--accent-2); }
+    .m3 .feature-tag { color: var(--accent-3); }
+    .m4 .feature-tag { color: var(--member-4); }
+
+    /* ───── Section Headings ───── */
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin: 1.5rem 0 0.75rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ───── Sub-section Labels ───── */
+    .sub-section {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--info);
+      margin: 1.2rem 0 0.5rem 0;
+      padding-left: 0.5rem;
+      border-left: 3px solid var(--info);
+    }
+
+    /* ───── Tables ───── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+    }
+    thead th {
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 2px solid var(--border);
+    }
+    thead th:first-child { border-radius: 8px 0 0 0; }
+    thead th:last-child { border-radius: 0 8px 0 0; }
+    tbody td {
+      padding: 0.55rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .file-name {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.8rem;
+      color: var(--info);
+      word-break: break-all;
+    }
+    .db-table-name {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.8rem;
+      color: var(--accent-2);
+      background: rgba(0,206,201,0.1);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    /* ───── Key Concepts ───── */
+    .concepts-list {
+      list-style: none;
+      padding: 0;
+    }
+    .concepts-list li {
+      padding: 0.5rem 0 0.5rem 1.5rem;
+      position: relative;
+      font-size: 0.88rem;
+      border-bottom: 1px solid rgba(46,49,64,0.6);
+    }
+    .concepts-list li:last-child { border-bottom: none; }
+    .concepts-list li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      font-weight: 700;
+    }
+    .m1 .concepts-list li::before { color: var(--member-1); }
+    .m2 .concepts-list li::before { color: var(--member-2); }
+    .m3 .concepts-list li::before { color: var(--member-3); }
+    .m4 .concepts-list li::before { color: var(--member-4); }
+    .concept-bold { font-weight: 600; }
+    .concept-code {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.8rem;
+      background: var(--surface-2);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      color: var(--accent-1-light);
+    }
+
+    /* ───── Summary Section ───── */
+    .summary-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .summary-section h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .summary-table thead th {
+      text-align: center;
+    }
+    .summary-table thead th:first-child {
+      text-align: left;
+    }
+    .summary-table tbody td {
+      text-align: center;
+    }
+    .summary-table tbody td:first-child {
+      text-align: left;
+      font-weight: 600;
+    }
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+    }
+    .dot-1 { background: var(--member-1); }
+    .dot-2 { background: var(--member-2); }
+    .dot-3 { background: var(--member-3); }
+    .dot-4 { background: var(--member-4); }
+
+    /* ───── Tips Section ───── */
+    .tips-section {
+      background: linear-gradient(135deg, rgba(0,184,148,0.08), rgba(116,185,255,0.06));
+      border: 1px solid rgba(0,184,148,0.2);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .tips-section h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--success);
+    }
+    .tips-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .tip-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-size: 0.88rem;
+      padding: 0.6rem 0.8rem;
+      background: rgba(0,0,0,0.2);
+      border-radius: 10px;
+    }
+    .tip-num {
+      background: var(--success);
+      color: #000;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .important-note {
+      margin-top: 1.2rem;
+      padding: 1rem 1.2rem;
+      background: rgba(108,92,231,0.1);
+      border: 1px solid rgba(108,92,231,0.25);
+      border-radius: 10px;
+      font-size: 0.88rem;
+    }
+    .important-note strong {
+      color: var(--accent-1-light);
+    }
+
+    /* ───── Footer ───── */
+    .footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    /* ═══════════════════════════════════════ */
+    /*           PRINT / PDF STYLES           */
+    /* ═══════════════════════════════════════ */
+    @media print {
+      @page {
+        size: A4;
+        margin: 15mm 12mm;
+      }
+      body {
+        background: #fff !important;
+        color: #1a1a2e !important;
+        padding: 0;
+        font-size: 9.5pt;
+        line-height: 1.5;
+      }
+      .download-bar { display: none !important; }
+      .header {
+        background: #f5f3ff !important;
+        border: 1px solid #ddd !important;
+        padding: 1.5rem !important;
+        margin-bottom: 1.2rem !important;
+        break-inside: avoid;
+      }
+      .header h1 {
+        background: none !important;
+        -webkit-text-fill-color: #4a3ab5 !important;
+        color: #4a3ab5 !important;
+        font-size: 1.6rem !important;
+      }
+      .header .subtitle { color: #555 !important; }
+      .header::before { display: none; }
+      .member-card {
+        background: #fff !important;
+        border: 1.5px solid #ddd !important;
+        padding: 1.2rem !important;
+        margin-bottom: 1rem !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .member-card::before { height: 3px !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m1 .member-badge { background: #ede9fe !important; color: #5b4bc7 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m2 .member-badge { background: #e0faf9 !important; color: #00918d !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m3 .member-badge { background: #fce4ec !important; color: #c0507a !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m4 .member-badge { background: #fff8e1 !important; color: #b8941e !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m1::before { background: #6c5ce7 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m2::before { background: #00cec9 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m3::before { background: #fd79a8 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .m4::before { background: #fdcb6e !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .feature-tag {
+        background: #f0f0f5 !important;
+        border: 1px solid #ddd !important;
+        color: #333 !important;
+      }
+      thead th {
+        background: #f0f0f5 !important;
+        color: #333 !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      tbody td { border-bottom-color: #eee !important; }
+      .file-name { color: #2563eb !important; }
+      .db-table-name { color: #047857 !important; background: #ecfdf5 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .section-title { color: #555 !important; }
+      .section-title::after { background: #ddd !important; }
+      .sub-section { color: #2563eb !important; border-left-color: #2563eb !important; }
+      .concepts-list li { border-bottom-color: #eee !important; color: #333 !important; }
+      .concepts-list li::before { color: #333 !important; }
+      .concept-code { background: #f0f0f5 !important; color: #5b4bc7 !important; }
+      .summary-section { background: #fff !important; border: 1.5px solid #ddd !important; break-inside: avoid; }
+      .tips-section {
+        background: #f0fdf4 !important;
+        border: 1.5px solid #bbf7d0 !important;
+        break-inside: avoid;
+      }
+      .tips-section h2 { color: #047857 !important; }
+      .tip-item { background: #f5f5f5 !important; }
+      .tip-num { background: #047857 !important; color: #fff !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .important-note { background: #f5f3ff !important; border-color: #c4b5fd !important; }
+      .important-note strong { color: #5b4bc7 !important; }
+      .dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .dot-1 { background: #6c5ce7 !important; }
+      .dot-2 { background: #00cec9 !important; }
+      .dot-3 { background: #fd79a8 !important; }
+      .dot-4 { background: #fdcb6e !important; }
+      .footer { display: none; }
+      .member-card .role-desc { color: #666 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ═══ Header ═══ -->
+    <div class="header">
+      <div class="emoji">🩺</div>
+      <h1>PhysioCare — Exam Feature Distribution</h1>
+      <p class="subtitle">Team of 4 · Feature Ownership · Database Tables · Key Concepts</p>
+    </div>
+
+    <!-- ═══ Download Button ═══ -->
+    <div class="download-bar">
+      <button class="btn-download" onclick="window.print()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Download as PDF
+      </button>
+    </div>
+
+    <!-- ══════════════════════════════════════ -->
+    <!--          MEMBER 1 — RUDRESH           -->
+    <!-- ══════════════════════════════════════ -->
+    <div class="member-card m1">
+      <div class="member-badge">👤 Member 1</div>
+      <h2>Rudresh (Team Leader)</h2>
+      <p class="role-desc">Core AI engine, database architecture, and real-time exercise feedback</p>
+
+      <div class="features-owned">
+        <span class="feature-tag">🏋️ Pose Estimation System</span>
+        <span class="feature-tag">🗄️ Database Design</span>
+        <span class="feature-tag">🔊 Feedback Engine</span>
+      </div>
+
+      <!-- Files — Pose Estimation -->
+      <div class="section-title">📁 Files to Know</div>
+
+      <div class="sub-section">Pose Estimation (Core Engine)</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">exercise_session_screen.dart</td><td>Main exercise session UI — camera + skeleton overlay + live stats</td></tr>
+          <tr><td class="file-name">camera_pose_view.dart</td><td>Camera feed integration with pose detection</td></tr>
+          <tr><td class="file-name">web_pose_view.dart</td><td>Web-specific pose detection using MediaPipe JS interop</td></tr>
+          <tr><td class="file-name">web_mediapipe_bridge.dart</td><td>JS↔Dart bridge for MediaPipe communication</td></tr>
+          <tr><td class="file-name">unified_pose.dart</td><td>Unified data model for cross-platform pose landmarks</td></tr>
+          <tr><td class="file-name">angle_utils.dart</td><td>Joint angle calculation using dot product formula</td></tr>
+          <tr><td class="file-name">exercise_type.dart</td><td>Exercise type enum and classification</td></tr>
+          <tr><td class="file-name">pose_painter.dart</td><td>Skeleton drawing on camera canvas</td></tr>
+          <tr><td class="file-name">unified_pose_painter.dart</td><td>Cross-platform pose painter</td></tr>
+          <tr><td class="file-name">pose_session_controller.dart</td><td>Session state management & orchestration</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">Rep Counting (State Machine per Exercise)</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">bicep_curl_counter.dart</td><td>Bicep curl state machine with 3-sec hold validation</td></tr>
+          <tr><td class="file-name">squat_logic.dart</td><td>Squat rep counting logic</td></tr>
+          <tr><td class="file-name">side_raise_logic.dart</td><td>Side raise rep counting logic</td></tr>
+          <tr><td class="file-name">hip_abduction_logic.dart</td><td>Hip abduction rep counting logic</td></tr>
+          <tr><td class="file-name">knee_extension_logic.dart</td><td>Knee extension rep counting logic</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">Web Exercise Logic (MediaPipe-Specific)</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">web_bicep_curl_logic.dart</td><td>Web bicep curl detection</td></tr>
+          <tr><td class="file-name">web_squat_logic.dart</td><td>Web squat detection</td></tr>
+          <tr><td class="file-name">web_side_raise_logic.dart</td><td>Web side raise detection</td></tr>
+          <tr><td class="file-name">web_hip_abduction_logic.dart</td><td>Web hip abduction detection</td></tr>
+          <tr><td class="file-name">web_knee_extension_logic.dart</td><td>Web knee extension detection</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">Feedback Engine + Database</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">feedback_engine.dart</td><td>Milestone announcements ("Halfway!", "Last rep!")</td></tr>
+          <tr><td class="file-name">audio_feedback_service.dart</td><td>Text-to-speech voice cues using flutter_tts</td></tr>
+          <tr><td class="file-name">supabase_service.dart</td><td>Supabase initialization & connection setup</td></tr>
+        </tbody>
+      </table>
+
+      <!-- DB Tables -->
+      <div class="section-title">🗄️ Database Tables</div>
+      <table>
+        <thead><tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr></thead>
+        <tbody>
+          <tr><td><span class="db-table-name">session_reports</span></td><td>Each exercise session result</td><td>patient_id, exercise_title, reps_done, duration_seconds, accuracy</td></tr>
+          <tr><td><span class="db-table-name">exercises</span></td><td>Exercise catalog</td><td>title, description</td></tr>
+          <tr><td><span class="db-table-name">assigned_exercises</span></td><td>Therapist → Patient assignments</td><td>patient_id, therapist_id, exercise_id, target_reps, sets, start_date, end_date, status</td></tr>
+          <tr><td><span class="db-table-name">profiles</span></td><td>All user profiles</td><td>id, name, role, contact, condition, assigned_therapist_id, display_id</td></tr>
+        </tbody>
+      </table>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-top:0.3rem;">⚡ As DB designer, Rudresh should be able to explain <strong style="color:var(--text);">all 11 tables</strong> at a high level.</p>
+
+      <!-- Key Concepts -->
+      <div class="section-title">🧠 Key Concepts for Exam</div>
+      <ul class="concepts-list">
+        <li><span class="concept-bold">Pose Detection Pipeline:</span> Camera → MediaPipe/ML Kit → 33 Landmarks → UnifiedPose</li>
+        <li><span class="concept-bold">Joint Angle Calculation:</span> <span class="concept-code">cos(θ) = (BA⃗ · BC⃗) / (|BA⃗| × |BC⃗|)</span> → arccos → degrees</li>
+        <li><span class="concept-bold">Rep Counting State Machine:</span> <span class="concept-code">down → holding (3s) → up_done → rep counted!</span></li>
+        <li><span class="concept-bold">Platform-specific:</span> MediaPipe for Web (JS interop), ML Kit for Mobile (native on-device)</li>
+        <li><span class="concept-bold">Why Supabase:</span> PostgreSQL + built-in Auth + real-time subscriptions + Row Level Security</li>
+      </ul>
+    </div>
+
+    <!-- ══════════════════════════════════════ -->
+    <!--              MEMBER 2                 -->
+    <!-- ══════════════════════════════════════ -->
+    <div class="member-card m2">
+      <div class="member-badge">👤 Member 2</div>
+      <h2>Member 2</h2>
+      <p class="role-desc">Patient-facing experience, video references, and in-app notifications</p>
+
+      <div class="features-owned">
+        <span class="feature-tag">🏠 Patient Dashboard</span>
+        <span class="feature-tag">📺 YouTube Video Reference</span>
+        <span class="feature-tag">🔔 Notification Feature</span>
+      </div>
+
+      <div class="section-title">📁 Files to Know</div>
+
+      <div class="sub-section">Patient Dashboard</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">patient_home_screen.dart</td><td>Patient portal shell with bottom navigation</td></tr>
+          <tr><td class="file-name">patient_portal_home_screen.dart</td><td>Dashboard with greeting, stats, today's exercises, completion tracking</td></tr>
+          <tr><td class="file-name">my_exercises_screen.dart</td><td>Exercise list with search, filters (Active/Upcoming/Completed), auto-expiry</td></tr>
+          <tr><td class="file-name">session_reports_screen.dart</td><td>Session history — past logs with reps, duration, accuracy</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">YouTube Video Reference</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">exercise_reference_player.dart</td><td>Conditional import entry point (web vs stub)</td></tr>
+          <tr><td class="file-name">exercise_reference_player_web.dart</td><td>Web implementation — embedded YouTube iframe per exercise</td></tr>
+          <tr><td class="file-name">exercise_reference_player_stub.dart</td><td>Mobile stub/fallback implementation</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">Notification Feature + Supporting Services</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">notifications_screen.dart</td><td>Notification feed with individual & bulk "mark all read"</td></tr>
+          <tr><td class="file-name">exercise_service.dart</td><td>CRUD operations for exercises & assigned exercises</td></tr>
+          <tr><td class="file-name">session_service.dart</td><td>Save & fetch session reports from Supabase</td></tr>
+          <tr><td class="file-name">exercise_status_utils.dart</td><td>Exercise status computation (Active/Upcoming/Completed)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">🗄️ Database Tables</div>
+      <table>
+        <thead><tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr></thead>
+        <tbody>
+          <tr><td><span class="db-table-name">assigned_exercises</span></td><td>Exercises assigned to patient</td><td>exercise_id, target_reps, sets, sessions_per_day, start_date, end_date, status</td></tr>
+          <tr><td><span class="db-table-name">session_reports</span></td><td>Completed session logs</td><td>patient_id, exercise_title, reps_done, duration_seconds, accuracy</td></tr>
+          <tr><td><span class="db-table-name">notifications</span></td><td>In-app notification records</td><td>user_id, title, message, is_read, type, created_at</td></tr>
+          <tr><td><span class="db-table-name">profiles</span></td><td>Patient's own profile</td><td>name, role, condition, assigned_therapist_id, display_id</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">🧠 Key Concepts for Exam</div>
+      <ul class="concepts-list">
+        <li><span class="concept-bold">Patient Portal Navigation:</span> Bottom nav with Dashboard, Exercises, Sessions, Reports tabs</li>
+        <li><span class="concept-bold">Exercise Filtering:</span> Active (within date range) / Upcoming (future start) / Completed (past end)</li>
+        <li><span class="concept-bold">Auto-expiry:</span> Exercises auto-transition to "completed" based on end_date</li>
+        <li><span class="concept-bold">YouTube Embedding:</span> Uses conditional imports — web shows iframe, mobile shows fallback</li>
+        <li><span class="concept-bold">Notification Lifecycle:</span> Created on appointment status change → displayed in feed → mark read</li>
+      </ul>
+    </div>
+
+    <!-- ══════════════════════════════════════ -->
+    <!--              MEMBER 3                 -->
+    <!-- ══════════════════════════════════════ -->
+    <div class="member-card m3">
+      <div class="member-badge">👤 Member 3</div>
+      <h2>Member 3</h2>
+      <p class="role-desc">Therapist-facing portal and AI-powered report generation with PDF export</p>
+
+      <div class="features-owned">
+        <span class="feature-tag">🩺 Therapist Dashboard</span>
+        <span class="feature-tag">📊 Report Generation (AI + PDF)</span>
+      </div>
+
+      <div class="section-title">📁 Files to Know</div>
+
+      <div class="sub-section">Therapist Dashboard</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">therapist_home_screen.dart</td><td>Therapist home — patient list with search, per-patient session summaries</td></tr>
+          <tr><td class="file-name">therapist_patient_detail_screen.dart</td><td>Detailed patient view — profile, exercises, sessions, pain alerts, feedback</td></tr>
+          <tr><td class="file-name">therapist_service.dart</td><td>Fetch patients, assign exercises, write feedback, manage pain alerts</td></tr>
+          <tr><td class="file-name">pain_alert_service.dart</td><td>Pain alert system — create, throttle (3-min), offline retry queue</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">Report Generation (AI + PDF)</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">patient_report_screen.dart</td><td>Patient-facing report view with period filters & stats</td></tr>
+          <tr><td class="file-name">therapist_report_screen.dart</td><td>Therapist-facing report view with detailed patient analytics</td></tr>
+          <tr><td class="file-name">report_service.dart</td><td>Report data aggregation — total sessions, reps, minutes, avg accuracy</td></tr>
+          <tr><td class="file-name">ai_summary_service.dart</td><td>Gemini 2.5 Flash API integration for clinical summary generation</td></tr>
+          <tr><td class="file-name">report_generator.dart</td><td>PDF generation & export using pdf + printing packages</td></tr>
+          <tr><td class="file-name">report_model.dart</td><td>Data model for report statistics</td></tr>
+          <tr><td class="file-name">report_period.dart</td><td>Enum for Weekly / Monthly / All Time filtering</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">🗄️ Database Tables</div>
+      <table>
+        <thead><tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr></thead>
+        <tbody>
+          <tr><td><span class="db-table-name">profiles</span></td><td>Patient profiles viewed by therapist</td><td>name, role, contact, condition, assigned_therapist_id</td></tr>
+          <tr><td><span class="db-table-name">assigned_exercises</span></td><td>Exercises this therapist assigned</td><td>patient_id, exercise_id, target_reps, sets, start_date, end_date</td></tr>
+          <tr><td><span class="db-table-name">session_reports</span></td><td>Session data for report aggregation</td><td>patient_id, reps_done, duration_seconds, accuracy, exercise_title</td></tr>
+          <tr><td><span class="db-table-name">therapist_feedback</span></td><td>Clinical text feedback per patient</td><td>therapist_id, patient_id, feedback_text, created_at</td></tr>
+          <tr><td><span class="db-table-name">pain_alerts</span></td><td>Pain alerts raised by patients</td><td>patient_id, therapist_id, pain_level, message, status</td></tr>
+          <tr><td><span class="db-table-name">reports</span></td><td>Generated report metadata</td><td>patient_id, period, generated_at, summary</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">🧠 Key Concepts for Exam</div>
+      <ul class="concepts-list">
+        <li><span class="concept-bold">Therapist Workflow:</span> View patients → Select → Details → Assign exercises → Write feedback → View reports</li>
+        <li><span class="concept-bold">Pain Alert System:</span> Patient triggers mid-exercise → 3-min re-trigger throttle → offline retry queue (30×10s)</li>
+        <li><span class="concept-bold">Report Aggregation:</span> Total sessions, reps, minutes, avg accuracy, best session, progress trend</li>
+        <li><span class="concept-bold">AI Summary (Gemini):</span> REST API call to Gemini 2.5 Flash → 3-4 sentence clinical progress note</li>
+        <li><span class="concept-bold">Graceful Fallback:</span> If API key missing or network fails → local template-based summary</li>
+        <li><span class="concept-bold">PDF Generation:</span> <span class="concept-code">pdf</span> package builds document + <span class="concept-code">printing</span> package exports/shares</li>
+      </ul>
+    </div>
+
+    <!-- ══════════════════════════════════════ -->
+    <!--              MEMBER 4                 -->
+    <!-- ══════════════════════════════════════ -->
+    <div class="member-card m4">
+      <div class="member-badge">👤 Member 4</div>
+      <h2>Member 4</h2>
+      <p class="role-desc">User authentication, role-based routing, and full appointment scheduling system</p>
+
+      <div class="features-owned">
+        <span class="feature-tag">🔐 Authentication System</span>
+        <span class="feature-tag">📅 Appointment Scheduling</span>
+      </div>
+
+      <div class="section-title">📁 Files to Know</div>
+
+      <div class="sub-section">Authentication</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">landing_screen.dart</td><td>Landing page — app intro with login/register options</td></tr>
+          <tr><td class="file-name">login_screen.dart</td><td>Email/password login via Supabase Auth</td></tr>
+          <tr><td class="file-name">register_screen.dart</td><td>Registration with dual-role selection (Patient/Therapist), therapist picker</td></tr>
+          <tr><td class="file-name">auth_service.dart</td><td>Supabase Auth wrapper — signUp, signIn, signOut, currentUser</td></tr>
+          <tr><td class="file-name">profile_service.dart</td><td>Profile CRUD — create on register, fetch, update</td></tr>
+          <tr><td class="file-name">app_routes.dart</td><td>Named route definitions & role-based routing logic</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sub-section">Appointment Scheduling</div>
+      <table>
+        <thead><tr><th>File</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td class="file-name">book_appointment_screen.dart</td><td>Calendar-based booking — browse dates → pick slot → submit with query</td></tr>
+          <tr><td class="file-name">my_appointments_screen.dart</td><td>Patient's appointment list with status tracking</td></tr>
+          <tr><td class="file-name">therapist_availability_screen.dart</td><td>Therapist sets weekly time windows, slot duration, blocked dates</td></tr>
+          <tr><td class="file-name">therapist_bookings_screen.dart</td><td>Therapist confirms/rejects incoming booking requests</td></tr>
+          <tr><td class="file-name">appointment_service.dart</td><td>All appointment CRUD, availability management, slot generation</td></tr>
+          <tr><td class="file-name">appointment_models.dart</td><td>Data models — Appointment, Availability, BlockedDate, TimeSlot</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">🗄️ Database Tables</div>
+      <table>
+        <thead><tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr></thead>
+        <tbody>
+          <tr><td><span class="db-table-name">profiles</span></td><td>User profiles created at registration</td><td>id, name, email, role, contact, condition, assigned_therapist_id, display_id</td></tr>
+          <tr><td><span class="db-table-name">appointments</span></td><td>Booking records</td><td>patient_id, therapist_id, date, start_time, end_time, status, query, notes</td></tr>
+          <tr><td><span class="db-table-name">therapist_availability</span></td><td>Weekly availability windows</td><td>therapist_id, day_of_week, start_time, end_time, slot_duration_minutes</td></tr>
+          <tr><td><span class="db-table-name">therapist_blocked_dates</span></td><td>Blocked dates (holidays, leave)</td><td>therapist_id, date, reason</td></tr>
+          <tr><td><span class="db-table-name">notifications</span></td><td>Created on appointment status changes</td><td>user_id, title, message, type, is_read</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">🧠 Key Concepts for Exam</div>
+      <ul class="concepts-list">
+        <li><span class="concept-bold">Auth Flow:</span> Landing → Login/Register → Supabase Auth → Create Profile → Role-based routing</li>
+        <li><span class="concept-bold">Dual-Role Registration:</span> User selects Patient or Therapist; Patients pick their assigned therapist</li>
+        <li><span class="concept-bold">Supabase Auth:</span> Uses <span class="concept-code">supabase_flutter</span> for email/password auth with session management</li>
+        <li><span class="concept-bold">Appointment Lifecycle:</span> <span class="concept-code">pending → confirmed / rejected / cancelled</span></li>
+        <li><span class="concept-bold">Availability System:</span> Therapist sets weekly windows → system generates available time slots</li>
+        <li><span class="concept-bold">Blocked Dates:</span> Therapist blocks specific dates with reason → no slots generated for those days</li>
+        <li><span class="concept-bold">Calendar Booking:</span> Select date → see available slots → pick slot → submit with optional query</li>
+      </ul>
+    </div>
+
+    <!-- ══════════════════════════════════════ -->
+    <!--           SUMMARY TABLE               -->
+    <!-- ══════════════════════════════════════ -->
+    <div class="summary-section">
+      <h2>📊 Distribution Summary</h2>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Features</th>
+            <th>Primary DB Tables</th>
+            <th># Files</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="dot dot-1"></span>Rudresh (Leader)</td>
+            <td>Pose Estimation, Database, Feedback</td>
+            <td>session_reports, exercises, assigned_exercises, profiles</td>
+            <td>~25+</td>
+          </tr>
+          <tr>
+            <td><span class="dot dot-2"></span>Member 2</td>
+            <td>Patient Dashboard, YouTube Ref, Notifications</td>
+            <td>assigned_exercises, session_reports, notifications</td>
+            <td>~8</td>
+          </tr>
+          <tr>
+            <td><span class="dot dot-3"></span>Member 3</td>
+            <td>Therapist Dashboard, Report Gen</td>
+            <td>therapist_feedback, pain_alerts, reports</td>
+            <td>~9</td>
+          </tr>
+          <tr>
+            <td><span class="dot dot-4"></span>Member 4</td>
+            <td>Auth System, Scheduling</td>
+            <td>appointments, therapist_availability, profiles</td>
+            <td>~12</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══════════════════════════════════════ -->
+    <!--            EXAM TIPS                  -->
+    <!-- ══════════════════════════════════════ -->
+    <div class="tips-section">
+      <h2>🎯 Exam Preparation Tips</h2>
+      <div class="tips-grid">
+        <div class="tip-item"><span class="tip-num">1</span><span>Open and <strong>read every file</strong> listed in your section</span></div>
+        <div class="tip-item"><span class="tip-num">2</span><span>Understand your <strong>database tables</strong> — column names & data flows</span></div>
+        <div class="tip-item"><span class="tip-num">3</span><span>Be able to <strong>draw a flow diagram</strong> for your feature end-to-end</span></div>
+        <div class="tip-item"><span class="tip-num">4</span><span>Know <strong>which packages & APIs</strong> your feature uses</span></div>
+        <div class="tip-item"><span class="tip-num">5</span><span>Be ready to explain <strong>why</strong> design decisions were made</span></div>
+        <div class="tip-item"><span class="tip-num">6</span><span>Practice <strong>demoing</strong> your feature live in the app</span></div>
+      </div>
+      <div class="important-note">
+        <strong>⚡ Shared knowledge everyone must have:</strong> Overall app architecture (Flutter + Supabase + Gemini), how routing works, the full tech stack, and the README.md — read it fully.
+      </div>
+    </div>
+
+    <!-- ═══ Footer ═══ -->
+    <div class="footer">
+      PhysioCare — AI-Powered Physiotherapy Platform · Team Distribution Document · July 2026
+    </div>
+
+  </div>
+</body>
+</html>

@@ -284,14 +284,14 @@ class _TherapistPatientDetailScreenState
         'patient_id':   widget.patientId,
         'therapist_id': therapistId,
         'message':      text,
-        'created_at':   DateTime.now().toIso8601String(),
+        'created_at':   DateTime.now().toUtc().toIso8601String(),
       });
 
       // Send notification to patient
       await AppointmentService().createNotification(
         userId: widget.patientId,
-        title: 'New Feedback Received',
-        body: 'Your therapist has sent you a new message.',
+        title: 'New Feedback from Your Therapist',
+        body: text,
         type: 'feedback',
         referenceId: therapistId,
       );

@@ -73,7 +73,7 @@ class _SessionReportsScreenState extends State<SessionReportsScreen> {
     final weekAgo  = now.subtract(const Duration(days: 7));
     final weekRows = _sessions.where((s) {
       try {
-        final dt = DateTime.parse(s['created_at'].toString());
+        final dt = DateTime.parse(s['created_at'].toString()).toLocal();
         return dt.isAfter(weekAgo);
       } catch (_) {
         return false;

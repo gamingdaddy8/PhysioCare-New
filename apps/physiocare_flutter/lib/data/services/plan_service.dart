@@ -16,7 +16,7 @@ class PlanService {
       'pain_level':   painLevel,
       'description':  description,
       'status':       'pending',
-      'created_at':   DateTime.now().toIso8601String(),
+      'created_at':   DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -72,7 +72,7 @@ class PlanService {
       'therapist_id': therapistId,
       'patient_id':   patientId,
       'message':      message,
-      'created_at':   DateTime.now().toIso8601String(),
+      'created_at':   DateTime.now().toUtc().toIso8601String(),
     });
   }
 

@@ -132,7 +132,7 @@ class TherapistService {
       'therapist_id': therapistId,
       'patient_id':   patientId,
       'message':      message,
-      'created_at':   DateTime.now().toIso8601String(),
+      'created_at':   DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -184,7 +184,7 @@ class TherapistService {
         .from('pain_alerts')
         .update({
           'status': 'reviewed',
-          'reviewed_at': DateTime.now().toIso8601String(),
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', alertId);
   }

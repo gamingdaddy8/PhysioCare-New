@@ -189,7 +189,7 @@ class _ExerciseSessionScreenState extends State<ExerciseSessionScreen> {
         'accuracy':             _liveAccuracy,
         'notes':                null,
         'ended_by_pain_alert':  _endedByPainAlert,
-        'created_at':           DateTime.now().toIso8601String(),
+        'created_at':           DateTime.now().toUtc().toIso8601String(),
       });
 
       if (!mounted) return;

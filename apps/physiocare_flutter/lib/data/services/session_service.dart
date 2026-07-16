@@ -23,7 +23,7 @@ class SessionService {
       'duration_seconds': durationSeconds,
       'accuracy':         accuracy,
       'notes':            notes,
-      'created_at':       DateTime.now().toIso8601String(),
+      'created_at':       DateTime.now().toUtc().toIso8601String(),
     });
   }
 

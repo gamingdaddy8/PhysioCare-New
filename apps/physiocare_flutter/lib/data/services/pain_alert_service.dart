@@ -36,7 +36,7 @@ class PainAlertService {
     String? message,
     int sessionDurationSeconds = 0,
   }) async {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
 
     try {
       // Check for re-trigger: existing active alert within 3 minutes
@@ -137,7 +137,7 @@ class PainAlertService {
             '${message != null && message.isNotEmpty ? 'Message: "$message"' : 'No message provided.'}',
         'type': 'pain_alert',
         'is_read': false,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (e) {
       debugPrint('Failed to create therapist notification: $e');
@@ -255,7 +255,7 @@ class PainAlertService {
     int days = 30,
   }) async {
     final since =
-        DateTime.now().subtract(Duration(days: days)).toIso8601String();
+        DateTime.now().toUtc().subtract(Duration(days: days)).toIso8601String();
 
     final rows = await _supabase
         .from('pain_alerts')
@@ -288,7 +288,7 @@ class PainAlertService {
   Future<void> markAlertReviewed(String alertId) async {
     await _supabase.from('pain_alerts').update({
       'status': 'reviewed',
-      'reviewed_at': DateTime.now().toIso8601String(),
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', alertId);
   }
 
